@@ -6,8 +6,10 @@ REGLAS:
 3. Si un dato no está presente en el documento, usa una cadena vacía "".
 4. Para valores numéricos (inversiones, CPM, alcance, impresiones), conserva el formato del documento original (ej. "15.000 €", "3,50 €").
 5. Identifica la filial correcta (ad_gravity, la_naranja_mecanica, neural_one, adg) según el contexto del documento.
-6. La tabla de inversión debe exportarse en tabla_inversion_markdown con formato Markdown preservando filas y columnas.
-7. Prioriza la extracción de los paquetes Essential, Advanced y Elite con sus KPIs asociados.
+6. Para el índice, usa formato "Título: Subtítulo" en contenido_01 a contenido_06.
+7. La tabla de inversión debe exportarse en tabla_inversion_markdown con formato Markdown preservando filas y columnas.
+8. Prioriza la extracción de los paquetes Essential, Advanced y Elite con sus KPIs asociados.
+9. Consulta docs/reference/plantilla_estructura.md para el mapa completo de placeholders.
 
 ESQUEMA JSON ESPERADO:
 {schema}

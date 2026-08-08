@@ -48,6 +48,7 @@ Thumbs.db
 uploads/
 output/
 *.pdf
+!docs/reference/*.pdf
 !docs/samples/.gitkeep
 
 # Docling cache

@@ -1,3 +1,6 @@
+REFERENCE_MANUAL = "docs/reference/manual_identidad_corporativa.pdf"
+REFERENCE_PLANTILLA = "docs/reference/plantilla_base_adg.pdf"
+
 ADG_COLORS = {
     "petrol_blue": "#02445B",
     "blanco": "#F6F6F6",
@@ -16,4 +19,15 @@ SUBSIDIARY_COLORS = {
 TYPOGRAPHY = {
     "primary": "Helvetica Neue",
     "fallback": "Arial",
+    "weights": ["Light", "Regular", "Bold"],
 }
+
+BRAND_VALUES = ["audacia", "eficiencia", "data_driven", "integracion"]
+
+LOGO_VARIANTS = [
+    "version_positiva",
+    "version_negativo_a",
+    "version_negativo_b",
+    "isotipo",
+    "version_monocromo",
+]

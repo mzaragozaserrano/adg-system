@@ -1,20 +1,45 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "Plantilla_base_ADG",
-  "description": "Esquema JSON de etiquetas Mustache de la plantilla Google Slides ADG Media Group",
+  "description": "Etiquetas Mustache de la plantilla Google Slides ADG Media Group. Ver docs/reference/plantilla_estructura.md",
   "type": "object",
   "properties": {
-    "titulo_slide": {
+    "titulo_presentacion": {
       "type": "string",
-      "description": "Título principal de la presentación"
+      "description": "Título principal (portada)"
     },
-    "subtitulo": {
+    "subtitulo_presentacion": {
       "type": "string",
-      "description": "Subtítulo o campaña"
+      "description": "Subtítulo de la presentación"
     },
-    "fecha_informe": {
+    "contenido_01": {
       "type": "string",
-      "description": "Fecha del informe"
+      "description": "Índice apartado 01 (formato: Título: Subtítulo)"
+    },
+    "contenido_02": { "type": "string" },
+    "contenido_03": { "type": "string" },
+    "contenido_04": { "type": "string" },
+    "contenido_05": { "type": "string" },
+    "contenido_06": { "type": "string" },
+    "informe_titulo": {
+      "type": "string",
+      "description": "Ej. Informe mensual - Madrid"
+    },
+    "informe_periodo": {
+      "type": "string",
+      "description": "Ej. Marzo 2026"
+    },
+    "separador_titulo": {
+      "type": "string",
+      "description": "Título de diapositiva separador"
+    },
+    "separador_subtitulo": {
+      "type": "string",
+      "description": "Subtítulo del separador"
+    },
+    "contacto": {
+      "type": "string",
+      "description": "Datos de contacto en diapositiva de cierre"
     },
     "cliente": {
       "type": "string",
@@ -27,71 +52,36 @@
     },
     "inversion_essential": {
       "type": "string",
-      "description": "Inversión del paquete Essential (ej. 15k)"
+      "description": "Inversión paquete Essential (ej. 15k)"
     },
     "inversion_advanced": {
       "type": "string",
-      "description": "Inversión del paquete Advanced (ej. 20k)"
+      "description": "Inversión paquete Advanced (ej. 20k)"
     },
     "inversion_elite": {
       "type": "string",
-      "description": "Inversión del paquete Elite (ej. 30k)"
+      "description": "Inversión paquete Elite (ej. 30k)"
     },
-    "cpm_objetivo_essential": {
-      "type": "string",
-      "description": "CPM objetivo paquete Essential"
-    },
-    "cpm_objetivo_advanced": {
-      "type": "string",
-      "description": "CPM objetivo paquete Advanced"
-    },
-    "cpm_objetivo_elite": {
-      "type": "string",
-      "description": "CPM objetivo paquete Elite"
-    },
-    "alcance_essential": {
-      "type": "string",
-      "description": "Alcance estimado paquete Essential"
-    },
-    "alcance_advanced": {
-      "type": "string",
-      "description": "Alcance estimado paquete Advanced"
-    },
-    "alcance_elite": {
-      "type": "string",
-      "description": "Alcance estimado paquete Elite"
-    },
-    "impresiones_essential": {
-      "type": "string",
-      "description": "Impresiones paquete Essential"
-    },
-    "impresiones_advanced": {
-      "type": "string",
-      "description": "Impresiones paquete Advanced"
-    },
-    "impresiones_elite": {
-      "type": "string",
-      "description": "Impresiones paquete Elite"
-    },
+    "cpm_objetivo_essential": { "type": "string" },
+    "cpm_objetivo_advanced": { "type": "string" },
+    "cpm_objetivo_elite": { "type": "string" },
+    "alcance_essential": { "type": "string" },
+    "alcance_advanced": { "type": "string" },
+    "alcance_elite": { "type": "string" },
+    "impresiones_essential": { "type": "string" },
+    "impresiones_advanced": { "type": "string" },
+    "impresiones_elite": { "type": "string" },
     "tabla_inversion_markdown": {
       "type": "string",
-      "description": "Tabla completa de inversión en formato Markdown"
+      "description": "Tabla de inversión en Markdown"
     },
-    "resumen_ejecutivo": {
-      "type": "string",
-      "description": "Resumen ejecutivo del informe"
-    },
-    "notas_adicionales": {
-      "type": "string",
-      "description": "Notas o consideraciones adicionales"
-    }
+    "resumen_ejecutivo": { "type": "string" },
+    "notas_adicionales": { "type": "string" }
   },
   "required": [
-    "titulo_slide",
-    "cliente",
-    "inversion_essential",
-    "inversion_advanced",
-    "inversion_elite"
+    "titulo_presentacion",
+    "subtitulo_presentacion",
+    "cliente"
   ],
   "additionalProperties": false
 }

@@ -80,13 +80,27 @@ lauzs/
 ├── prompts/
 │   └── system_prompt.txt     # Prompt para Gemini
 ├── docs/
-│   └── SDD_Maquetador_ADG.md # Documento de diseño
+│   ├── SDD_Maquetador_ADG.md      # Documento de diseño
+│   └── reference/                 # Manual de identidad + plantilla base (PDF)
+│       ├── manual_identidad_corporativa.pdf
+│       ├── plantilla_base_adg.pdf
+│       ├── manual_identidad_resumen.md
+│       └── plantilla_estructura.md
 └── ROADMAP.md                # Plan de desarrollo
 ```
 
 ## Principio de diseño
 
 El código **no dibuja diapositivas**. Clona una plantilla pre-diseñada en Google Slides e inyecta datos via placeholders Mustache (`{{clave}}`). El 90% del cumplimiento del manual de identidad reside en la plantilla.
+
+## Documentos de referencia
+
+| Archivo | Ubicación |
+|---------|-----------|
+| Manual de Identidad Corporativa 2026 | `docs/reference/manual_identidad_corporativa.pdf` |
+| Plantilla base de presentación | `docs/reference/plantilla_base_adg.pdf` |
+
+Resúmenes en Markdown: `docs/reference/manual_identidad_resumen.md` y `docs/reference/plantilla_estructura.md`.
 
 ## Roadmap
 

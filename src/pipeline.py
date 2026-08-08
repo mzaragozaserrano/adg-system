@@ -18,7 +18,7 @@ class MaquetadorPipeline:
         mapped_data = self._mapper.map_to_template(extracted_text)
 
         if not presentation_name:
-            titulo = mapped_data.get("titulo_slide", "Presentacion ADG")
+            titulo = mapped_data.get("titulo_presentacion", "Presentacion ADG")
             timestamp = datetime.now().strftime("%Y%m%d_%H%M")
             presentation_name = f"{titulo}_{timestamp}"
 

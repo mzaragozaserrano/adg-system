@@ -3,6 +3,7 @@ from pathlib import Path
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
+DOCS_REFERENCE = PROJECT_ROOT / "docs" / "reference"
 
 
 class Settings(BaseSettings):
@@ -21,7 +22,10 @@ class Settings(BaseSettings):
     uploads_dir: Path = PROJECT_ROOT / "uploads"
     output_dir: Path = PROJECT_ROOT / "output"
     template_schema_path: Path = PROJECT_ROOT / "schemas" / "template_schema.json"
+    plantilla_map_path: Path = PROJECT_ROOT / "schemas" / "plantilla_slides_map.json"
     system_prompt_path: Path = PROJECT_ROOT / "prompts" / "system_prompt.txt"
+    manual_identidad_path: Path = DOCS_REFERENCE / "manual_identidad_corporativa.pdf"
+    plantilla_base_path: Path = DOCS_REFERENCE / "plantilla_base_adg.pdf"
 
     google_scopes: list[str] = [
         "https://www.googleapis.com/auth/presentations",

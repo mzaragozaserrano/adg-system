@@ -1,0 +1,32 @@
+---
+description: Reglas de marca ADG basadas en el manual de identidad corporativa
+globs: config/brand_guidelines.py,docs/reference/**
+alwaysApply: false
+---
+
+# Manual de Identidad ADG
+
+## Fuente oficial
+
+`docs/reference/manual_identidad_corporativa.pdf` (Guía de Marca & Estilo Visual 2026)
+
+## Colores corporativos (no modificar sin actualizar manual)
+
+| Nombre | HEX |
+|--------|-----|
+| Petrol Blue | #02445B |
+| Blanco | #F6F6F6 |
+| Platino | #CECECD |
+| Obsidian Blue | #01222E |
+| Azul Digital | #005C7F |
+| Acero Glaciar | #6A96A6 |
+
+## Tipografía
+
+Helvetica Neue (Light, Regular, Bold). Aplicada en Slide Masters, nunca via API.
+
+## Reglas
+
+- Logos y fondos son estáticos en la plantilla
+- Colores de filiales solo para decisiones dinámicas (gráficos)
+- Cambios de paleta requieren actualizar manual PDF + `brand_guidelines.py`

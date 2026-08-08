@@ -9,6 +9,13 @@ alwaysApply: true
 
 El código NO dibuja diapositivas. Inyecta datos en plantillas pre-formateadas de Google Slides via `ReplaceAllTextRequest`.
 
+## Documentos de referencia (obligatorio consultar)
+
+- `docs/reference/manual_identidad_corporativa.pdf` — colores, tipografía, logos
+- `docs/reference/plantilla_base_adg.pdf` — estructura de diapositivas y campos editables
+- `docs/reference/plantilla_estructura.md` — mapa de placeholders por tipo de slide
+- `config/brand_guidelines.py` — paleta y filiales en código
+
 ## Arquitectura (4 módulos)
 
 1. **Frontend**: `app.py` (Streamlit, localhost)

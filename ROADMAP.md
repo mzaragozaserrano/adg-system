@@ -14,6 +14,8 @@
 - [x] Inicializar repositorio y estructura de proyecto
 - [x] Definir `requirements.txt` con dependencias core
 - [x] Crear `config/settings.py` y `config/brand_guidelines.py`
+- [x] Incorporar manual de identidad y plantilla base en `docs/reference/`
+- [x] Documentar estructura de plantilla y paleta de marca
 - [x] Crear esquema JSON de plantilla (`schemas/template_schema.json`)
 - [ ] Crear entorno virtual Python 3.11+
 - [ ] Instalar dependencias: `pip install -r requirements.txt`
@@ -24,7 +26,7 @@
   - [ ] Descargar `credentials.json` a la raíz del proyecto
 - [ ] Obtener API Key gratuita de Gemini en [Google AI Studio](https://aistudio.google.com/)
 - [ ] Configurar `.env` desde `.env.example`
-- [ ] Subir `Plantilla_base_ADG` a Google Drive y copiar File ID
+- [ ] Subir `Plantilla_base_ADG` a Google Drive, añadir etiquetas Mustache según `docs/reference/plantilla_estructura.md` y copiar File ID
 
 ### Criterio de aceptación
 
