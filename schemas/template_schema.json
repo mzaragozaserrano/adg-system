@@ -1,0 +1,97 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Plantilla_base_ADG",
+  "description": "Esquema JSON de etiquetas Mustache de la plantilla Google Slides ADG Media Group",
+  "type": "object",
+  "properties": {
+    "titulo_slide": {
+      "type": "string",
+      "description": "Título principal de la presentación"
+    },
+    "subtitulo": {
+      "type": "string",
+      "description": "Subtítulo o campaña"
+    },
+    "fecha_informe": {
+      "type": "string",
+      "description": "Fecha del informe"
+    },
+    "cliente": {
+      "type": "string",
+      "description": "Nombre del cliente"
+    },
+    "filial": {
+      "type": "string",
+      "enum": ["ad_gravity", "la_naranja_mecanica", "neural_one", "adg"],
+      "description": "Filial ADG para decisiones dinámicas de marca"
+    },
+    "inversion_essential": {
+      "type": "string",
+      "description": "Inversión del paquete Essential (ej. 15k)"
+    },
+    "inversion_advanced": {
+      "type": "string",
+      "description": "Inversión del paquete Advanced (ej. 20k)"
+    },
+    "inversion_elite": {
+      "type": "string",
+      "description": "Inversión del paquete Elite (ej. 30k)"
+    },
+    "cpm_objetivo_essential": {
+      "type": "string",
+      "description": "CPM objetivo paquete Essential"
+    },
+    "cpm_objetivo_advanced": {
+      "type": "string",
+      "description": "CPM objetivo paquete Advanced"
+    },
+    "cpm_objetivo_elite": {
+      "type": "string",
+      "description": "CPM objetivo paquete Elite"
+    },
+    "alcance_essential": {
+      "type": "string",
+      "description": "Alcance estimado paquete Essential"
+    },
+    "alcance_advanced": {
+      "type": "string",
+      "description": "Alcance estimado paquete Advanced"
+    },
+    "alcance_elite": {
+      "type": "string",
+      "description": "Alcance estimado paquete Elite"
+    },
+    "impresiones_essential": {
+      "type": "string",
+      "description": "Impresiones paquete Essential"
+    },
+    "impresiones_advanced": {
+      "type": "string",
+      "description": "Impresiones paquete Advanced"
+    },
+    "impresiones_elite": {
+      "type": "string",
+      "description": "Impresiones paquete Elite"
+    },
+    "tabla_inversion_markdown": {
+      "type": "string",
+      "description": "Tabla completa de inversión en formato Markdown"
+    },
+    "resumen_ejecutivo": {
+      "type": "string",
+      "description": "Resumen ejecutivo del informe"
+    },
+    "notas_adicionales": {
+      "type": "string",
+      "description": "Notas o consideraciones adicionales"
+    }
+  },
+  "required": [
+    "titulo_slide",
+    "cliente",
+    "inversion_essential",
+    "inversion_advanced",
+    "inversion_elite"
+  ],
+  "additionalProperties": false
+}
