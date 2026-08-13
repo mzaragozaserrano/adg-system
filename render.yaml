@@ -8,6 +8,8 @@ services:
     envVars:
       - key: FRONTEND_URL
         sync: false
+      - key: API_URL
+        sync: false
       - key: GOOGLE_CLIENT_ID
         sync: false
       - key: GOOGLE_CLIENT_SECRET
