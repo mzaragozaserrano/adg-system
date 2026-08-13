@@ -41,7 +41,16 @@ class Settings(BaseSettings):
 
     database_url: str = f"sqlite:///{PROJECT_ROOT / 'data' / 'validador.db'}"
     secret_key: str = "change-me-in-production"
-    allowed_email_domain: str = "adgravity.com"
+    allowed_email_domains: str = "adgravity.com"
+
+    @property
+    def resolved_allowed_email_domains(self) -> list[str]:
+        domains = [
+            domain.strip().lower()
+            for domain in self.allowed_email_domains.split(",")
+            if domain.strip()
+        ]
+        return domains or ["adgravity.com"]
 
     google_client_id: str = ""
     google_client_secret: str = ""

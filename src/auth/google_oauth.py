@@ -84,9 +84,10 @@ def exchange_google_code(code: str, state: str) -> tuple[dict, str]:
     user_info = _fetch_user_info(creds.token)
     email = user_info.get("email", "")
     if not email or not is_allowed_email(email):
+        domains = ", ".join(f"@{domain}" for domain in settings.resolved_allowed_email_domains)
         raise HTTPException(
             status_code=403,
-            detail=f"Solo se permiten cuentas del dominio @{settings.allowed_email_domain}",
+            detail=f"Solo se permiten cuentas de los dominios: {domains}",
         )
 
     token_data = {

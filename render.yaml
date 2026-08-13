@@ -24,7 +24,7 @@ services:
         generateValue: true
       - key: TOKEN_ENCRYPTION_KEY
         generateValue: true
-      - key: ALLOWED_EMAIL_DOMAIN
+      - key: ALLOWED_EMAIL_DOMAINS
         value: adgravity.com
       - key: DATABASE_URL
         value: sqlite:////app/data/validador.db
