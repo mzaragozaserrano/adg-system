@@ -81,7 +81,7 @@ En tu proyecto OAuth (tipo **Aplicación web**):
 | `GOOGLE_APP_ID` | Número de proyecto Google |
 | `SECRET_KEY` | Clave aleatoria larga (JWT) |
 | `TOKEN_ENCRYPTION_KEY` | Clave Fernet para tokens Google |
-| `ALLOWED_EMAIL_DOMAIN` | `adgmediagroup.com` |
+| `ALLOWED_EMAIL_DOMAIN` | `adgravity.com` |
 | `DATABASE_URL` | `sqlite:////app/data/validador.db` (con disco en Render) |
 | `CORS_ORIGINS` | Opcional: URLs extra separadas por coma |
 
