@@ -31,4 +31,8 @@ app.include_router(presentations.router)
 
 @app.get("/health")
 def health():
-    return {"status": "ok", "service": "adg-system"}
+    return {
+        "status": "ok",
+        "service": "adg-system",
+        "allowed_email_domains": settings.resolved_allowed_email_domains,
+    }
