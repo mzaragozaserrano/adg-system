@@ -1,0 +1,27 @@
+---
+description: Reglas de marca ADG para el validador de identidad
+globs: config/brand_guidelines.py,docs/reference/**
+alwaysApply: false
+---
+
+# Manual de Identidad ADG — Reglas de Validación
+
+## Fuente oficial
+
+`docs/reference/manual_identidad_corporativa.pdf`
+
+## Reglas de texto
+
+| Rol | Fuente | Color | Peso |
+|-----|--------|-------|------|
+| Título | Helvetica / Elvética | `#02445B` Petrol Blue | Bold |
+| Subtítulo | Helvetica / Elvética | `#01222E` Obsidian Blue | Light |
+| Cuerpo | Helvetica / Elvética | `#000000` Negro | Regular |
+
+## Paleta permitida en diapositivas
+
+`#02445B`, `#F6F6F6`, `#CECECD`, `#01222E`, `#005C7F`, `#6A96A6`, `#FFFFFF`, `#000000`
+
+## Cambios
+
+Cualquier cambio en paleta o tipografía requiere actualizar manual PDF + `brand_guidelines.py`.

@@ -1,0 +1,27 @@
+---
+description: Convenciones del validador Google Slides
+globs: src/validators/slides_validator.py,src/slides/**
+alwaysApply: false
+---
+
+# Validador Google Slides
+
+## Acceso
+
+- Scope readonly: `presentations.readonly` + `drive.readonly`
+- OAuth Desktop App con `credentials.json`
+
+## Detección de rol de texto
+
+1. Placeholder type: TITLE → header, SUBTITLE → subtitle, BODY → body
+2. Sin placeholder: heurística por tamaño y peso
+
+## Colores
+
+- Comparar con tolerancia (`COLOR_TOLERANCE = 0.02`)
+- Ignorar colores `theme:*` (vinculados al tema de Slides)
+- Validar fondos de página y rellenos de formas contra paleta ADG
+
+## Salida
+
+`ValidationIssue` con `slide_number`, `category`, `message`, `expected`, `actual`, `text_preview`

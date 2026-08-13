@@ -1,97 +1,89 @@
-# Maquetador ADG Media Group
+# Validador de Identidad ADG — v2.0
 
-Sistema web local que convierte informes PDF no estructurados en presentaciones editables de Google Slides, respetando el manual de identidad ADG.
+Herramienta interna para empleados de ADG Media Group: valida presentaciones PDF y Google Slides contra el manual de identidad corporativa, corrige errores en Slides y exporta informes.
 
-## Arquitectura
-
-```
-PDF → Docling (extracción) → Gemini (mapeo JSON) → Google Slides API (inyección) → Presentación
-```
-
-| Módulo | Tecnología | Coste |
-|--------|-----------|-------|
-| Frontend | Streamlit | $0 |
-| Extracción PDF | Docling (local) | $0 |
-| Mapeo semántico | Gemini 2.5 Flash-Lite | $0 |
-| Renderizado | Google Slides API | $0 |
-
-## Requisitos
-
-- Python 3.11+
-- Mac M4 Pro (recomendado) o cualquier Mac/Linux con Python
-- Cuenta Google con acceso a Google Cloud Console
-- API Key de Gemini (Free Tier)
-
-## Instalación
+## Arranque rápido
 
 ```bash
-git clone https://github.com/mzaragozaserrano/lauzs.git
-cd lauzs
+# Terminal 1 — API backend
+chmod +x run-api.sh run-frontend.sh
+./run-api.sh
 
-python -m venv .venv
-source .venv/bin/activate
-
-pip install -r requirements.txt
-
-cp .env.example .env
-# Editar .env con tus API keys e IDs
+# Terminal 2 — Frontend web
+./run-frontend.sh
 ```
 
-## Configuración Google Cloud
+Abre `http://localhost:5173` e inicia sesión con tu cuenta Google corporativa.
 
-1. Crear proyecto en [Google Cloud Console](https://console.cloud.google.com/)
-2. Habilitar **Google Slides API** y **Google Drive API**
-3. Crear credenciales OAuth 2.0 (tipo **Desktop App**)
-4. Descargar `credentials.json` a la raíz del proyecto
-5. Subir `Plantilla_base_ADG` a Google Drive
-6. Copiar el File ID de la plantilla a `GOOGLE_TEMPLATE_FILE_ID` en `.env`
+## Configuración
 
-## Configuración Gemini
+1. Copia `.env.example` a `.env`
+2. Crea un proyecto en [Google Cloud Console](https://console.cloud.google.com/)
+3. Habilita Google Slides API y Google Drive API
+4. Crea credenciales OAuth 2.0 (tipo **Aplicación web**)
+5. Añade `http://localhost:8000/auth/google/callback` como URI de redirección
+6. Configura `GOOGLE_CLIENT_ID` y `GOOGLE_CLIENT_SECRET` en `.env`
 
-1. Obtener API Key en [Google AI Studio](https://aistudio.google.com/)
-2. Añadir a `.env`: `GEMINI_API_KEY=tu_key`
+## Funcionalidades
 
-## Uso
+| Función | PDF | Google Slides |
+|---------|-----|---------------|
+| Validar identidad ADG | Sí | Sí |
+| Informe filtrable | Sí | Sí |
+| Corrección automática | No | Sí (copia en Drive) |
+| Exportar corregido | — | PDF / PPTX |
+| Historial por usuario | Sí | Sí |
+| Informe PDF descargable | Sí | Sí |
+
+## CLI
 
 ```bash
-streamlit run app.py
+PYTHONPATH=. python scripts/validate.py pdf docs/samples/plantilla_base_adg.pdf
+PYTHONPATH=. python scripts/validate.py slides PRESENTATION_ID --json
 ```
 
-1. Abrir `http://localhost:8501`
-2. Arrastrar el PDF del informe
-3. Pulsar "Generar presentación"
-4. Abrir el enlace a Google Slides
+## Streamlit (legacy local)
 
-## Estructura del proyecto
+La interfaz Streamlit original sigue disponible para desarrollo local sin autenticación:
 
-```
-lauzs/
-├── app.py                    # Interfaz Streamlit
-├── config/
-│   ├── brand_guidelines.py   # Colores y tipografía ADG
-│   └── settings.py           # Configuración centralizada
-├── src/
-│   ├── dla/                  # Extracción PDF (Docling)
-│   ├── llm/                  # Mapeo semántico (Gemini)
-│   ├── slides/               # Google Slides API
-│   └── pipeline.py           # Orquestador
-├── schemas/
-│   └── template_schema.json  # Etiquetas Mustache de la plantilla
-├── prompts/
-│   └── system_prompt.txt     # Prompt para Gemini
-├── docs/
-│   └── SDD_Maquetador_ADG.md # Documento de diseño
-└── ROADMAP.md                # Plan de desarrollo
+```bash
+./run.sh
 ```
 
-## Principio de diseño
+## Estructura
 
-El código **no dibuja diapositivas**. Clona una plantilla pre-diseñada en Google Slides e inyecta datos via placeholders Mustache (`{{clave}}`). El 90% del cumplimiento del manual de identidad reside en la plantilla.
+```
+src/
+  api/              # FastAPI (auth, validación, corrección, historial)
+  auth/             # OAuth Google + JWT
+  db/               # Modelos SQLAlchemy
+  fixers/           # Motor de corrección Slides
+  validators/       # Validación PDF y Slides
+  services/         # Informes PDF, miniaturas
+frontend/           # React + Vite
+docs/manual_uso_equipo.md
+```
 
-## Roadmap
+## Despliegue con Docker
 
-Ver [ROADMAP.md](ROADMAP.md) para el plan de desarrollo por fases.
+```bash
+docker compose up --build
+```
 
-## Licencia
+## Despliegue en producción (Vercel + API)
 
-Uso interno — ADG Media Group.
+La **interfaz web** se publica en [Vercel](https://vercel.com/) (carpeta `frontend/`). La **API FastAPI** debe alojarse aparte (Render, Railway, Docker, etc.).
+
+Guía paso a paso: [docs/deploy-vercel.md](docs/deploy-vercel.md)
+
+Resumen rápido:
+
+1. Despliega la API (`render.yaml` incluido) y anota su URL.
+2. En Vercel: Root Directory = `frontend`, variable `VITE_API_URL` = URL de la API.
+3. Configura OAuth en Google Cloud con las URLs de producción.
+
+## Documentación
+
+- [Manual de uso para el equipo](docs/manual_uso_equipo.md)
+- [SDD](docs/SDD_Validador_ADG.md)
+- [Roadmap](ROADMAP.md)

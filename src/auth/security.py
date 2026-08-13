@@ -1,0 +1,61 @@
+import base64
+import hashlib
+import json
+from datetime import datetime, timedelta, timezone
+
+from cryptography.fernet import Fernet, InvalidToken
+from google.auth.transport.requests import Request
+from google.oauth2.credentials import Credentials
+from jose import JWTError, jwt
+
+from config.settings import GOOGLE_SCOPES_FULL, settings
+
+
+def _fernet() -> Fernet:
+    key = settings.token_encryption_key
+    if not key:
+        derived = hashlib.sha256(settings.secret_key.encode()).digest()
+        key = base64.urlsafe_b64encode(derived)
+    elif len(key) != 44:
+        derived = hashlib.sha256(key.encode()).digest()
+        key = base64.urlsafe_b64encode(derived)
+    return Fernet(key)
+
+
+def encrypt_token(token_data: dict) -> str:
+    return _fernet().encrypt(json.dumps(token_data).encode()).decode()
+
+
+def decrypt_token(encrypted: str) -> dict:
+    try:
+        return json.loads(_fernet().decrypt(encrypted.encode()).decode())
+    except InvalidToken as exc:
+        raise ValueError("Token de Google inválido o corrupto") from exc
+
+
+def credentials_from_encrypted(encrypted: str, scopes: list[str] | None = None) -> Credentials:
+    data = decrypt_token(encrypted)
+    creds = Credentials.from_authorized_user_info(data, scopes or GOOGLE_SCOPES_FULL)
+    if creds.expired and creds.refresh_token:
+        creds.refresh(Request())
+    return creds
+
+
+def create_access_token(user_id: int, email: str) -> str:
+    expire = datetime.now(timezone.utc) + timedelta(minutes=settings.access_token_expire_minutes)
+    payload = {"sub": str(user_id), "email": email, "exp": expire}
+    return jwt.encode(payload, settings.secret_key, algorithm="HS256")
+
+
+def decode_access_token(token: str) -> dict:
+    try:
+        return jwt.decode(token, settings.secret_key, algorithms=["HS256"])
+    except JWTError as exc:
+        raise ValueError("Token de sesión inválido") from exc
+
+
+def is_allowed_email(email: str) -> bool:
+    domain = settings.allowed_email_domain.lower().strip()
+    if not domain:
+        return True
+    return email.lower().endswith(f"@{domain}")
