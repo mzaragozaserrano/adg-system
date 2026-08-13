@@ -55,7 +55,8 @@ def decode_access_token(token: str) -> dict:
 
 
 def is_allowed_email(email: str) -> bool:
-    domain = settings.allowed_email_domain.lower().strip()
-    if not domain:
+    allowed_domains = settings.resolved_allowed_email_domains
+    if not allowed_domains:
         return True
-    return email.lower().endswith(f"@{domain}")
+    normalized_email = email.lower().strip()
+    return any(normalized_email.endswith(f"@{domain}") for domain in allowed_domains)

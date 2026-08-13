@@ -60,7 +60,7 @@ Copia `.env.example` a `.env` y configura:
 
 - `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` — credenciales OAuth Web de Google Cloud
 - `GOOGLE_REDIRECT_URI` — `http://localhost:8000/auth/google/callback`
-- `ALLOWED_EMAIL_DOMAIN` — dominio corporativo permitido
+- `ALLOWED_EMAIL_DOMAINS` — dominios corporativos permitidos (separados por coma)
 - `SECRET_KEY` — clave para tokens de sesión
 - `FRONTEND_URL` — URL del frontend (`http://localhost:5173`)
 

@@ -66,6 +66,32 @@ En tu proyecto OAuth (tipo **Aplicación web**):
 - `https://tu-proyecto.vercel.app`
 - `https://tu-proyecto-*.vercel.app` (si usas previews; Google no admite comodines — añade cada dominio de preview que uses o usa solo producción)
 
+### Publicar OAuth para que cualquier `@adgravity.com` pueda entrar
+
+Si al iniciar sesión aparece *"no ha completado la verificación de Google"* o *"solo los testers pueden probarlo"*, la pantalla de consentimiento OAuth está en modo **Prueba (Testing)**. Eso no se arregla en Vercel ni en Render: hay que cambiarlo en Google Cloud Console.
+
+**Opción recomendada — App interna (Google Workspace)**
+
+Si `adgravity.com` es un dominio de Google Workspace y el proyecto GCP pertenece a esa organización:
+
+1. [Google Cloud Console](https://console.cloud.google.com/) → **APIs y servicios** → **Pantalla de consentimiento de OAuth**.
+2. En **Tipo de usuario**, elige **Interno** (solo usuarios de tu organización).
+3. Guarda. No hace falta verificación de Google ni lista de testers: cualquier cuenta `@adgravity.com` de la organización puede autenticarse.
+
+**Opción alternativa — Publicar en producción**
+
+Si el proyecto GCP no puede ser interno (cuenta personal u otra organización):
+
+1. **Pantalla de consentimiento de OAuth** → revisa que el dominio autorizado incluya `adgravity.com`.
+2. Pulsa **Publicar aplicación** (cambiar de *Prueba* a *En producción*).
+3. Los scopes de Drive y Slides pueden exigir **verificación de Google** (formulario, varios días). Hasta que aprueben, Google puede limitar usuarios o mostrar advertencias.
+
+**Solución temporal (solo mientras está en Prueba)**
+
+En la misma pantalla, sección **Usuarios de prueba**, añade cada correo que necesite acceder (p. ej. `lauza.zaragoza@adgravity.com`). Máximo 100 usuarios en modo Prueba.
+
+Tras cambiar el estado de la app OAuth, no hace falta redesplegar la API: el cambio es inmediato en Google.
+
 ## Variables de entorno
 
 ### API (Render / servidor)
@@ -81,9 +107,11 @@ En tu proyecto OAuth (tipo **Aplicación web**):
 | `GOOGLE_APP_ID` | Número de proyecto Google |
 | `SECRET_KEY` | Clave aleatoria larga (JWT) |
 | `TOKEN_ENCRYPTION_KEY` | Clave Fernet para tokens Google |
-| `ALLOWED_EMAIL_DOMAIN` | `adgravity.com` |
+| `ALLOWED_EMAIL_DOMAINS` | `adgravity.com` (varios dominios separados por coma) |
 | `DATABASE_URL` | `sqlite:////app/data/validador.db` (con disco en Render) |
 | `CORS_ORIGINS` | Opcional: URLs extra separadas por coma |
+
+**Importante (Render):** si en el dashboard de Render existe la variable legacy `ALLOWED_EMAIL_DOMAIN` con un valor antiguo (p. ej. `adgmediagroup.com`), **elimínala**. La app usa `ALLOWED_EMAIL_DOMAINS`. Tras el deploy, comprueba `GET /health` y verifica `allowed_email_domains`.
 
 ### Vercel (frontend)
 
@@ -93,7 +121,7 @@ En tu proyecto OAuth (tipo **Aplicación web**):
 
 ## Comprobar el despliegue
 
-1. `https://TU-API/health` → `{"status":"ok",...}`
+1. `https://TU-API/health` → debe incluir `"allowed_email_domains":["adgravity.com"]`
 2. Abre la URL de Vercel → pantalla de login.
 3. Inicia sesión con Google → vuelve a `/auth/callback` con token.
 4. Valida una presentación de prueba.
