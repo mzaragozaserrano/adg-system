@@ -3,7 +3,7 @@
 ## Acceso
 
 1. Abre la aplicación web (por defecto `http://localhost:5173`).
-2. Pulsa **Iniciar sesión con Google** con tu cuenta corporativa `@adgmediagroup.com`.
+2. Pulsa **Iniciar sesión con Google** con tu cuenta corporativa `@adgravity.com`.
 3. Autoriza el acceso a Google Slides y Drive cuando se solicite.
 
 ## Validar un PDF

@@ -41,7 +41,7 @@ class Settings(BaseSettings):
 
     database_url: str = f"sqlite:///{PROJECT_ROOT / 'data' / 'validador.db'}"
     secret_key: str = "change-me-in-production"
-    allowed_email_domain: str = "adgmediagroup.com"
+    allowed_email_domain: str = "adgravity.com"
 
     google_client_id: str = ""
     google_client_secret: str = ""
