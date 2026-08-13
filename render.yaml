@@ -28,7 +28,3 @@ services:
         value: adgmediagroup.com
       - key: DATABASE_URL
         value: sqlite:////app/data/validador.db
-    disk:
-      name: validador-data
-      mountPath: /app/data
-      sizeGB: 1
