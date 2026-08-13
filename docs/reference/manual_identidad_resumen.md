@@ -2,54 +2,26 @@
 
 > Fuente: `manual_identidad_corporativa.pdf`
 
-## Identidad
-
-ADG Media Group unifica organizaciones diversas bajo una imagen y personalidad propia. Enfoque en transformación digital, atribución avanzada y automatización del marketing.
-
-## Valores
-
-| Valor | Descripción |
-|-------|-------------|
-| Audacia | Cambios radicales cuando el negocio lo necesita |
-| Eficiencia | Automatización para eliminar lo superfluo |
-| Data-driven | Los datos como fuente de verdad |
-| Integración | Consultoría, medios y creatividad en una sola solución |
-
 ## Paleta corporativa
 
-| Nombre | HEX | Uso en código |
-|--------|-----|---------------|
-| Petrol Blue | `#02445B` | `petrol_blue` |
-| Blanco | `#F6F6F6` | `blanco` |
-| Platino | `#CECECD` | `platino` |
-| Obsidian Blue | `#01222E` | `obsidian_blue` |
-| Azul Digital | `#005C7F` | `azul_digital` |
-| Acero Glaciar | `#6A96A6` | `acero_glaciar` |
-
-## Colores isotipo por compañía
-
-Definidos en el manual como imágenes (página "Colores isotipo por compañía"). Valores en código (`config/brand_guidelines.py`):
-
-| Filial | HEX |
-|--------|-----|
-| AD Gravity | `#047DBC` |
-| La Naranja Mecánica | `#F18E5D` |
-| Neural One | `#75BA91` |
-
-Verificar contra el manual antes de usar en gráficos dinámicos.
+| Nombre | HEX | Uso en validación |
+|--------|-----|-------------------|
+| Petrol Blue | `#02445B` | Títulos (Bold) |
+| Blanco | `#F6F6F6` | Fondos permitidos |
+| Platino | `#CECECD` | Fondos permitidos |
+| Obsidian Blue | `#01222E` | Subtítulos (Light) |
+| Azul Digital | `#005C7F` | Elementos gráficos |
+| Acero Glaciar | `#6A96A6` | Elementos gráficos |
 
 ## Tipografía
 
-- **Fuente principal:** Helvetica Neue
-- **Pesos:** Light, Regular, Bold
-- **Fallback:** Arial
+- **Fuente:** Helvetica Neue (acepta Helvetica / Elvética)
+- **Pesos:** Light (subtítulos), Regular (cuerpo), Bold (títulos)
 
-La tipografía se aplica en las Diapositivas Maestras de Google Slides, no via código.
+## Reglas del validador
 
-## Logotipo
-
-Variantes documentadas: positiva, negativo (A), negativo (B), isotipo, monocromo. Los logos son estáticos en la plantilla Slides.
-
-## Presentaciones
-
-El manual incluye un ejemplo de slide con "Título presentación" y "Subtítulo presentación + fecha", alineado con `plantilla_base_adg.pdf`.
+1. Toda la tipografía debe ser Helvetica / Elvética
+2. Títulos: Petrol Blue Bold
+3. Subtítulos: Obsidian Blue Light
+4. Cuerpo: negro Regular
+5. Colores de diapositiva: solo paleta corporativa

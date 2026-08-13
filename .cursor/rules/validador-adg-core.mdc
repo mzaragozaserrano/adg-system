@@ -1,0 +1,37 @@
+---
+description: Reglas core del Validador de Identidad ADG
+alwaysApply: true
+---
+
+# Validador de Identidad ADG Media Group
+
+## Propósito
+
+Validar presentaciones (Google Slides o PDF) contra el manual de identidad corporativa ADG.
+
+## Reglas de validación
+
+| Tipo de texto | Fuente | Color | Peso |
+|---------------|--------|-------|------|
+| Títulos | Helvetica / Elvética | Petrol Blue `#02445B` | Bold |
+| Subtítulos | Helvetica / Elvética | Obsidian Blue `#01222E` | Light |
+| Cuerpo | Helvetica / Elvética | Negro `#000000` | Regular |
+
+## Paleta permitida en diapositivas
+
+`#02445B`, `#F6F6F6`, `#CECECD`, `#01222E`, `#005C7F`, `#6A96A6`, `#FFFFFF`, `#000000`
+
+## Arquitectura
+
+1. **Frontend**: `app.py` (Streamlit con estilo ADG)
+2. **Validador Slides**: `src/validators/slides_validator.py` (Google Slides API readonly)
+3. **Validador PDF**: `src/validators/pdf_validator.py` (PyMuPDF)
+
+## Salida
+
+Cada error indica: número de diapositiva, categoría, mensaje, valor esperado y actual.
+
+## Documentos de referencia
+
+- `docs/reference/manual_identidad_corporativa.pdf`
+- `config/brand_guidelines.py`

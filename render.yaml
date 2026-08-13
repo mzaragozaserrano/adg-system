@@ -1,0 +1,32 @@
+services:
+  - type: web
+    name: validador-adg-api
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: FRONTEND_URL
+        sync: false
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: GOOGLE_REDIRECT_URI
+        sync: false
+      - key: GOOGLE_API_KEY
+        sync: false
+      - key: GOOGLE_APP_ID
+        sync: false
+      - key: SECRET_KEY
+        generateValue: true
+      - key: TOKEN_ENCRYPTION_KEY
+        generateValue: true
+      - key: ALLOWED_EMAIL_DOMAIN
+        value: adgmediagroup.com
+      - key: DATABASE_URL
+        value: sqlite:////app/data/validador.db
+    disk:
+      name: validador-data
+      mountPath: /app/data
+      sizeGB: 1
