@@ -51,11 +51,6 @@ def me(user: User = Depends(get_current_user)):
 
 @router.get("/google/picker-config")
 def google_picker_config(user: User = Depends(get_current_user)):
-    if not settings.google_api_key or not settings.google_app_id:
-        raise HTTPException(
-            status_code=503,
-            detail="Google Picker no configurado. Define GOOGLE_API_KEY y GOOGLE_APP_ID en .env.",
-        )
     if not user.google_token_encrypted:
         raise HTTPException(status_code=400, detail="Cuenta Google no vinculada")
 
@@ -63,12 +58,14 @@ def google_picker_config(user: User = Depends(get_current_user)):
     if not creds.token:
         raise HTTPException(status_code=400, detail="No se pudo obtener token de Google")
 
-    return {
+    response = {
         "access_token": creds.token,
-        "api_key": settings.google_api_key,
-        "app_id": settings.google_app_id,
         "client_id": settings.google_client_id,
     }
+    if settings.google_api_key and settings.google_app_id:
+        response["api_key"] = settings.google_api_key
+        response["app_id"] = settings.google_app_id
+    return response
 
 
 @router.post("/logout")
