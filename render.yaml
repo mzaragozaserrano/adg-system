@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: validador-adg-api
+    name: adg-system-api
     runtime: docker
     dockerfilePath: ./Dockerfile
     plan: free

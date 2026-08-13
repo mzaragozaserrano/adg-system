@@ -47,7 +47,7 @@ Expón el puerto `8000` con HTTPS (nginx, Caddy, etc.).
 
 | Variable | Ejemplo |
 |----------|---------|
-| `VITE_API_URL` | `https://validador-adg-api.onrender.com` |
+| `VITE_API_URL` | `https://adg-system-api.onrender.com` |
 
 5. **Deploy**.
 
