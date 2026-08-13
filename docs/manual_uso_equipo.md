@@ -25,13 +25,15 @@ Los PDF solo se validan; para corregir automáticamente, trabaja la presentació
 
 ### Configurar selector de Drive (Google Picker)
 
-En Google Cloud Console, además del OAuth:
+En Google Cloud Console:
 
 1. Activa **Google Picker API**.
-2. Crea una **API key** restringida a Picker y al referrer `http://localhost:5173/*`.
-3. Añade en `.env`:
-   - `GOOGLE_API_KEY` — la API key
-   - `GOOGLE_APP_ID` — número de proyecto GCP (ej. `724095308816`)
+2. Crea una **API key** tipo **Aplicaciones web** con referentes HTTP:
+   - `http://localhost:5173/*` (local)
+   - `https://tu-dominio-vercel.app/*` (producción)
+3. Variables:
+   - **API (`.env`)**: `GOOGLE_API_KEY`, `GOOGLE_APP_ID`
+   - **Frontend (`frontend/.env.local` o Vercel)**: `VITE_GOOGLE_API_KEY`, `VITE_GOOGLE_APP_ID`
 
 ## Corregir errores en Slides
 

@@ -48,6 +48,10 @@ Expón el puerto `8000` con HTTPS (nginx, Caddy, etc.).
 | Variable | Ejemplo |
 |----------|---------|
 | `VITE_API_URL` | `https://adg-system-api.onrender.com` |
+| `VITE_GOOGLE_API_KEY` | API key **tipo aplicación web** (misma que `GOOGLE_API_KEY`) |
+| `VITE_GOOGLE_APP_ID` | Número de proyecto GCP (mismo que `GOOGLE_APP_ID`) |
+
+`VITE_GOOGLE_API_KEY` y `VITE_GOOGLE_APP_ID` son **obligatorias en Vercel**: el Picker se ejecuta en el navegador del dominio de Vercel, no en Render.
 
 5. **Deploy**.
 
@@ -61,10 +65,23 @@ En tu proyecto OAuth (tipo **Aplicación web**):
 
 - `https://TU-API.onrender.com/auth/google/callback`
 
-**Orígenes JavaScript autorizados** (para el picker de Drive)
+**Orígenes JavaScript autorizados** (cliente OAuth Web)
 
 - `https://tu-proyecto.vercel.app`
-- `https://tu-proyecto-*.vercel.app` (si usas previews; Google no admite comodines — añade cada dominio de preview que uses o usa solo producción)
+- `http://localhost:5173` (desarrollo local)
+
+### API key para Google Picker (error «developer key is invalid»)
+
+El selector de Drive usa **Google Picker** en el frontend. Si falla con *The API developer key is invalid*:
+
+1. En GCP → **APIs y servicios** → **Biblioteca** → activa **Google Picker API**.
+2. **Credenciales** → crea una **clave de API** → tipo **Aplicaciones web** (no «IP» ni «servidor»).
+3. Restringe la key por **referentes HTTP** e incluye:
+   - `https://tu-proyecto.vercel.app/*`
+   - `https://*.vercel.app/*` (previews; Google no admite comodín en un solo entry — añade cada preview si hace falta)
+   - `http://localhost:5173/*` (local)
+4. El **número de proyecto** (`GOOGLE_APP_ID` / `VITE_GOOGLE_APP_ID`) debe ser el de el mismo proyecto GCP que el OAuth client.
+5. En **Vercel**, define `VITE_GOOGLE_API_KEY` y `VITE_GOOGLE_APP_ID` (no basta con tenerlas solo en Render).
 
 ### Publicar OAuth para que cualquier `@adgravity.com` pueda entrar
 
@@ -118,6 +135,8 @@ Tras cambiar el estado de la app OAuth, no hace falta redesplegar la API: el cam
 | Variable | Descripción |
 |----------|-------------|
 | `VITE_API_URL` | URL pública de la API (sin `/api` al final) |
+| `VITE_GOOGLE_API_KEY` | API key browser para Google Picker (referrer = dominio Vercel) |
+| `VITE_GOOGLE_APP_ID` | Número de proyecto GCP |
 
 ## Comprobar el despliegue
 

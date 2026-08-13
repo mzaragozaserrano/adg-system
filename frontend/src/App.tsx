@@ -3,7 +3,6 @@ import { Navigate, Route, Routes, useNavigate, useSearchParams } from "react-rou
 import {
   downloadReportPdf,
   fetchHistory,
-  fetchPickerConfig,
   fetchThumbnail,
   fetchValidation,
   fixPresentation,
@@ -11,6 +10,7 @@ import {
   validateSlides,
 } from "./api";
 import { describeMimeType, isGoogleSlidesMime, openSlidesPicker } from "./googlePicker";
+import { resolvePickerConfig } from "./pickerConfig";
 import { useAuth } from "./auth";
 
 interface Issue {
@@ -1041,7 +1041,7 @@ function Dashboard() {
     setError("");
     resetFixState();
     try {
-      const config = await fetchPickerConfig();
+      const config = await resolvePickerConfig();
       const picked = await openSlidesPicker(config);
       if (!picked) return;
 
