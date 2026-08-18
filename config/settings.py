@@ -20,7 +20,11 @@ GOOGLE_SCOPES_USERINFO = [
     "https://www.googleapis.com/auth/userinfo.profile",
 ]
 
-GOOGLE_SCOPES_FULL = GOOGLE_SCOPES_USERINFO + GOOGLE_SCOPES_READONLY + GOOGLE_SCOPES_WRITE
+GOOGLE_SCOPES_FULL = GOOGLE_SCOPES_USERINFO + [
+    "https://www.googleapis.com/auth/presentations",
+    "https://www.googleapis.com/auth/drive.readonly",
+    "https://www.googleapis.com/auth/drive.file",
+]
 
 
 class Settings(BaseSettings):
