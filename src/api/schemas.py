@@ -42,3 +42,9 @@ class ValidationHistoryItem(BaseModel):
     posible_count: int
     passed: bool
     created_at: str
+
+
+class TranscribeRequest(BaseModel):
+    url_or_id: str = Field(..., min_length=5)
+    slide_numbers: list[int] = Field(..., min_length=1)
+    new_document: bool = False
