@@ -45,12 +45,13 @@ def get_oauth_flow() -> Flow:
     return flow
 
 
-def build_google_auth_url(state: str) -> str:
+def build_google_auth_url(state: str, force_consent: bool = False) -> str:
     flow = get_oauth_flow()
+    prompt = "consent" if force_consent else "select_account"
     auth_url, _ = flow.authorization_url(
         access_type="offline",
         include_granted_scopes="true",
-        prompt="select_account",
+        prompt=prompt,
         state=state,
     )
     _pending_flows[state] = flow
