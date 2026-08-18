@@ -89,3 +89,4 @@ def test_api_health():
     body = response.json()
     assert body["status"] == "ok"
     assert body["allowed_email_domains"] == ["adgravity.com"]
+    assert body["allowed_emails"] == []

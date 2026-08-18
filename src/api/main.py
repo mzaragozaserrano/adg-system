@@ -35,4 +35,5 @@ def health():
         "status": "ok",
         "service": "adg-system",
         "allowed_email_domains": settings.resolved_allowed_email_domains,
+        "allowed_emails": settings.resolved_allowed_emails,
     }

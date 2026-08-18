@@ -25,7 +25,9 @@ services:
       - key: TOKEN_ENCRYPTION_KEY
         generateValue: true
       - key: ALLOWED_EMAIL_DOMAINS
-        value: adgravity.com,gmail.com
+        value: adgravity.com
+      - key: ALLOWED_EMAILS
+        sync: false
       - key: GOOGLE_SERVICE_ACCOUNT_JSON
         sync: false
       - key: DATABASE_URL

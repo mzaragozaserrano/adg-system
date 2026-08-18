@@ -6,7 +6,7 @@ from fastapi import HTTPException
 from google_auth_oauthlib.flow import Flow
 
 from config.settings import GOOGLE_SCOPES_FULL, settings
-from src.auth.security import decrypt_token, encrypt_token, is_allowed_email
+from src.auth.security import decrypt_token, encrypt_token, allowed_email_hint, is_allowed_email
 
 oauth = OAuth()
 
@@ -84,10 +84,9 @@ def exchange_google_code(code: str, state: str) -> tuple[dict, dict]:
     user_info = _fetch_user_info(creds.token)
     email = user_info.get("email", "")
     if not email or not is_allowed_email(email):
-        domains = ", ".join(f"@{domain}" for domain in settings.resolved_allowed_email_domains)
         raise HTTPException(
             status_code=403,
-            detail=f"Solo se permiten cuentas de los dominios: {domains}",
+            detail=f"Cuenta no autorizada. Permitidos: {allowed_email_hint()}",
         )
 
     token_data = {

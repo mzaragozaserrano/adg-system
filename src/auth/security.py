@@ -55,8 +55,24 @@ def decode_access_token(token: str) -> dict:
 
 
 def is_allowed_email(email: str) -> bool:
-    allowed_domains = settings.resolved_allowed_email_domains
-    if not allowed_domains:
-        return True
     normalized_email = email.lower().strip()
+    if normalized_email in settings.resolved_allowed_emails:
+        return True
+
+    allowed_domains = settings.resolved_allowed_email_domains
+    if not allowed_domains and not settings.resolved_allowed_emails:
+        return True
+    if not allowed_domains:
+        return False
     return any(normalized_email.endswith(f"@{domain}") for domain in allowed_domains)
+
+
+def allowed_email_hint() -> str:
+    parts: list[str] = []
+    if settings.resolved_allowed_email_domains:
+        parts.append(
+            "dominios: " + ", ".join(f"@{domain}" for domain in settings.resolved_allowed_email_domains)
+        )
+    if settings.resolved_allowed_emails:
+        parts.append("correos: " + ", ".join(settings.resolved_allowed_emails))
+    return "; ".join(parts)
