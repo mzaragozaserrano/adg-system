@@ -1,9 +1,12 @@
+import os
 from urllib.parse import urlencode
 
 import httpx
 from authlib.integrations.starlette_client import OAuth
 from fastapi import HTTPException
 from google_auth_oauthlib.flow import Flow
+
+os.environ["OAUTHLIB_RELAX_TOKEN_SCOPE"] = "1"
 
 from config.settings import GOOGLE_SCOPES_FULL, settings
 from src.auth.security import decrypt_token, encrypt_token, allowed_email_hint, is_allowed_email
