@@ -6,7 +6,7 @@ from fastapi import HTTPException
 from google_auth_oauthlib.flow import Flow
 
 from config.settings import GOOGLE_SCOPES_FULL, settings
-from src.auth.security import encrypt_token, is_allowed_email
+from src.auth.security import decrypt_token, encrypt_token, is_allowed_email
 
 oauth = OAuth()
 
@@ -47,7 +47,7 @@ def build_google_auth_url(state: str) -> str:
     auth_url, _ = flow.authorization_url(
         access_type="offline",
         include_granted_scopes="true",
-        prompt="consent",
+        prompt="select_account",
         state=state,
     )
     _pending_flows[state] = flow
@@ -68,7 +68,7 @@ def _fetch_user_info(access_token: str) -> dict:
     return response.json()
 
 
-def exchange_google_code(code: str, state: str) -> tuple[dict, str]:
+def exchange_google_code(code: str, state: str) -> tuple[dict, dict]:
     flow = _pending_flows.pop(state, None)
     if flow is None:
         raise HTTPException(status_code=400, detail="Sesión OAuth expirada. Vuelve a iniciar sesión.")
@@ -98,8 +98,15 @@ def exchange_google_code(code: str, state: str) -> tuple[dict, str]:
         "client_secret": creds.client_secret,
         "scopes": list(creds.scopes or GOOGLE_SCOPES_FULL),
     }
-    encrypted = encrypt_token(token_data)
-    return user_info, encrypted
+    return user_info, token_data
+
+
+def persist_google_token(token_data: dict, existing_encrypted: str | None) -> str:
+    if not token_data.get("refresh_token") and existing_encrypted:
+        previous = decrypt_token(existing_encrypted)
+        if previous.get("refresh_token"):
+            token_data["refresh_token"] = previous["refresh_token"]
+    return encrypt_token(token_data)
 
 
 def frontend_callback_url(token: str) -> str:

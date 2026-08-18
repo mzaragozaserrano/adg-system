@@ -15,10 +15,10 @@ def get_slide_thumbnail(
     credentials: Credentials,
     presentation_id: str,
     slide_number: int,
-    width: int = 400,
+    width: int = 1600,
 ) -> Path:
     settings.exports_dir.mkdir(parents=True, exist_ok=True)
-    image_path = settings.exports_dir / f"{presentation_id}_slide_{slide_number}.png"
+    image_path = settings.exports_dir / f"{presentation_id}_slide_{slide_number}_lg.png"
     if image_path.exists():
         age = time.time() - image_path.stat().st_mtime
         if age < CACHE_TTL_SECONDS:
@@ -31,10 +31,15 @@ def get_slide_thumbnail(
         raise ValueError("Número de diapositiva fuera de rango")
 
     page_id = slides[slide_number - 1]["objectId"]
+    thumbnail_size = "LARGE" if width >= 800 else "MEDIUM"
     thumbnail = (
         slides_service.presentations()
         .pages()
-        .getThumbnail(presentationId=presentation_id, pageObjectId=page_id)
+        .getThumbnail(
+            presentationId=presentation_id,
+            pageObjectId=page_id,
+            thumbnailProperties_thumbnailSize=thumbnail_size,
+        )
         .execute()
     )
     content_url = thumbnail.get("contentUrl")
