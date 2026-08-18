@@ -1,3 +1,4 @@
+import os
 import sys
 from pathlib import Path
 from unittest.mock import patch
@@ -8,6 +9,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from config.settings import GOOGLE_SCOPES_FULL
 from src.auth.google_oauth import build_google_auth_url, persist_google_token
 from src.auth.security import decrypt_token, encrypt_token
+
+
+def test_oauth_relaxes_token_scope_when_google_returns_previously_granted_scopes():
+    assert os.environ.get("OAUTHLIB_RELAX_TOKEN_SCOPE") == "1"
 
 
 def test_oauth_scopes_do_not_request_redundant_readonly_presentations():
