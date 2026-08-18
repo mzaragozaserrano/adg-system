@@ -477,7 +477,12 @@ function SlideThumbnail({
 
   return (
     <div className="slide-thumb-wrap">
-      <img className={className} src={src} alt={`Diapositiva ${slideNumber}`} />
+      <div className="slide-thumb-hover">
+        <img className={className} src={src} alt={`Diapositiva ${slideNumber}`} />
+        <div className="slide-thumb-zoom" aria-hidden="true">
+          <img src={src} alt="" />
+        </div>
+      </div>
       {showLabel && <span className="slide-thumb-label">Diap. {slideNumber}</span>}
     </div>
   );

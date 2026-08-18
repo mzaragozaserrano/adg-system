@@ -7,7 +7,12 @@ from sqlalchemy.orm import Session
 from config.settings import settings
 from src.api.deps import get_current_user
 from src.api.schemas import UserResponse
-from src.auth.google_oauth import build_google_auth_url, exchange_google_code, frontend_callback_url
+from src.auth.google_oauth import (
+    build_google_auth_url,
+    exchange_google_code,
+    frontend_callback_url,
+    persist_google_token,
+)
 from src.auth.security import create_access_token, credentials_from_encrypted
 from src.db.models import User, get_db
 
@@ -22,9 +27,10 @@ def google_login():
 
 @router.get("/google/callback")
 def google_callback(code: str, state: str, db: Session = Depends(get_db)):
-    user_info, encrypted_token = exchange_google_code(code, state)
+    user_info, token_data = exchange_google_code(code, state)
     email = user_info["email"]
     user = db.query(User).filter(User.email == email).first()
+    existing_encrypted = user.google_token_encrypted if user else None
     if not user:
         user = User(
             email=email,
@@ -36,7 +42,7 @@ def google_callback(code: str, state: str, db: Session = Depends(get_db)):
         user.name = user_info.get("name", user.name)
         user.picture = user_info.get("picture", user.picture)
 
-    user.google_token_encrypted = encrypted_token
+    user.google_token_encrypted = persist_google_token(token_data, existing_encrypted)
     db.commit()
     db.refresh(user)
 
