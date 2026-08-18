@@ -13,16 +13,16 @@ from src.auth.google_oauth import (
     frontend_callback_url,
     persist_google_token,
 )
-from src.auth.security import create_access_token, credentials_from_encrypted
+from src.auth.security import create_access_token, credentials_from_encrypted, decrypt_token
 from src.db.models import User, get_db
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
 @router.get("/google")
-def google_login():
+def google_login(consent: bool = False):
     state = secrets.token_urlsafe(32)
-    return RedirectResponse(build_google_auth_url(state))
+    return RedirectResponse(build_google_auth_url(state, force_consent=consent))
 
 
 @router.get("/google/callback")
@@ -42,7 +42,17 @@ def google_callback(code: str, state: str, db: Session = Depends(get_db)):
         user.name = user_info.get("name", user.name)
         user.picture = user_info.get("picture", user.picture)
 
-    user.google_token_encrypted = persist_google_token(token_data, existing_encrypted)
+    merged_encrypted = persist_google_token(token_data, existing_encrypted)
+
+    try:
+        merged_data = decrypt_token(merged_encrypted)
+    except Exception:
+        merged_data = {}
+
+    if not merged_data.get("refresh_token"):
+        return RedirectResponse(build_google_auth_url(secrets.token_urlsafe(32), force_consent=True))
+
+    user.google_token_encrypted = merged_encrypted
     db.commit()
     db.refresh(user)
 
