@@ -25,6 +25,8 @@ services:
       - key: TOKEN_ENCRYPTION_KEY
         generateValue: true
       - key: ALLOWED_EMAIL_DOMAINS
-        value: adgravity.com
+        value: adgravity.com,gmail.com
+      - key: GOOGLE_SERVICE_ACCOUNT_JSON
+        sync: false
       - key: DATABASE_URL
         value: sqlite:////app/data/validador.db
