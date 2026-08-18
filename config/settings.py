@@ -79,6 +79,8 @@ class Settings(BaseSettings):
     access_token_expire_minutes: int = 60 * 24 * 7
     token_encryption_key: str = ""
 
+    google_service_account_json: str = ""
+
     @property
     def google_scopes_write(self) -> list[str]:
         return GOOGLE_SCOPES_WRITE
