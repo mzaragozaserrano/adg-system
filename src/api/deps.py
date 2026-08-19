@@ -2,10 +2,11 @@ import json
 from pathlib import Path
 
 from fastapi import Depends, HTTPException, Header
+from google.oauth2.credentials import Credentials
 from sqlalchemy.orm import Session
 
-from src.auth.security import decode_access_token
-from src.db.models import User, get_db
+from src.auth.security import credentials_from_encrypted, decode_access_token
+from src.db.models import User, ValidationRecord, get_db
 
 
 def get_current_user(
@@ -24,6 +25,27 @@ def get_current_user(
     if not user or not user.is_active:
         raise HTTPException(status_code=401, detail="Usuario no encontrado")
     return user
+
+
+def get_google_credentials(user: User = Depends(get_current_user)) -> Credentials:
+    if not user.google_token_encrypted:
+        raise HTTPException(status_code=400, detail="Cuenta Google no vinculada")
+    return credentials_from_encrypted(user.google_token_encrypted)
+
+
+def get_user_validation_record(
+    validation_id: int,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> ValidationRecord:
+    record = (
+        db.query(ValidationRecord)
+        .filter(ValidationRecord.id == validation_id, ValidationRecord.user_id == user.id)
+        .first()
+    )
+    if not record:
+        raise HTTPException(status_code=404, detail="Validación no encontrada")
+    return record
 
 
 def save_validation_record(db: Session, user: User, result) -> int:

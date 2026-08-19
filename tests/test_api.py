@@ -6,12 +6,13 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from src.fixers.slides_fixer import SlidesFixer, _hex_to_rgb_normalized
+from src.fixers.slides_fixer import SlidesFixer
+from src.validators.color_utils import hex_to_rgb_normalized
 from src.validators.models import ValidationIssue
 
 
 def test_hex_to_rgb_normalized():
-    rgb = _hex_to_rgb_normalized("#02445B")
+    rgb = hex_to_rgb_normalized("#02445B")
     assert abs(rgb["red"] - 2 / 255) < 0.01
     assert abs(rgb["green"] - 68 / 255) < 0.01
     assert abs(rgb["blue"] - 91 / 255) < 0.01

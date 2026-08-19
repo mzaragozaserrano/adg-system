@@ -3,9 +3,9 @@ from pathlib import Path
 
 import httpx
 from google.oauth2.credentials import Credentials
-from googleapiclient.discovery import build
 
 from config.settings import settings
+from src.integrations.google.clients import build_slides_client
 from src.services.presentation_cache import get_cached_presentation
 
 CACHE_TTL_SECONDS = 60 * 60
@@ -24,7 +24,7 @@ def get_slide_thumbnail(
         if age < CACHE_TTL_SECONDS:
             return image_path
 
-    slides_service = build("slides", "v1", credentials=credentials)
+    slides_service = build_slides_client(credentials)
     presentation = get_cached_presentation(slides_service, presentation_id)
     slides = presentation.get("slides", [])
     if slide_number < 1 or slide_number > len(slides):
