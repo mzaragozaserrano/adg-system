@@ -5,7 +5,7 @@ from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 
 from config.settings import settings
-from src.api.deps import get_current_user
+from src.api.deps import get_current_user, get_google_credentials
 from src.api.schemas import UserResponse
 from src.auth.google_oauth import (
     build_google_auth_url,
@@ -66,11 +66,7 @@ def me(user: User = Depends(get_current_user)):
 
 
 @router.get("/google/picker-config")
-def google_picker_config(user: User = Depends(get_current_user)):
-    if not user.google_token_encrypted:
-        raise HTTPException(status_code=400, detail="Cuenta Google no vinculada")
-
-    creds = credentials_from_encrypted(user.google_token_encrypted)
+def google_picker_config(creds=Depends(get_google_credentials)):
     if not creds.token:
         raise HTTPException(status_code=400, detail="No se pudo obtener token de Google")
 

@@ -4,16 +4,22 @@ from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse
+from google.oauth2.credentials import Credentials
 from sqlalchemy.orm import Session
 
-from src.api.deps import assign_issue_ids, get_current_user, save_validation_record
+from src.api.deps import (
+    assign_issue_ids,
+    get_current_user,
+    get_google_credentials,
+    get_user_validation_record,
+    save_validation_record,
+)
 from src.api.schemas import ExportRequest, FixRequest, SlidesValidateRequest
-from src.auth.security import credentials_from_encrypted
 from src.db.models import FixRecord, User, ValidationRecord, get_db
 from src.fixers.slides_fixer import SlidesFixer, issue_from_fix_input
+from src.services.drive_files import assert_google_slides_file
 from src.services.report_pdf import generate_report_pdf
 from src.services.thumbnails import get_slide_thumbnail, warm_slide_thumbnails
-from src.services.drive_files import assert_google_slides_file
 from src.validators import validate_pdf, validate_slides
 from src.validators.slides_validator import extract_presentation_id
 
@@ -48,13 +54,10 @@ async def validate_pdf_upload(
 @router.post("/validate/slides")
 def validate_slides_url(
     body: SlidesValidateRequest,
+    creds: Credentials = Depends(get_google_credentials),
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    if not user.google_token_encrypted:
-        raise HTTPException(status_code=400, detail="Cuenta Google no vinculada")
-
-    creds = credentials_from_encrypted(user.google_token_encrypted)
     presentation_id = extract_presentation_id(body.url_or_id)
     display_name = assert_google_slides_file(creds, presentation_id)
     result = validate_slides(presentation_id, credentials=creds)
@@ -83,13 +86,10 @@ def validate_slides_url(
 @router.post("/fix")
 def fix_presentation(
     body: FixRequest,
+    creds: Credentials = Depends(get_google_credentials),
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    if not user.google_token_encrypted:
-        raise HTTPException(status_code=400, detail="Cuenta Google no vinculada")
-
-    creds = credentials_from_encrypted(user.google_token_encrypted)
     fixer = SlidesFixer(credentials=creds)
 
     requested_ids = set(body.issue_ids)
@@ -128,12 +128,8 @@ def fix_presentation(
 @router.post("/export")
 def export_presentation(
     body: ExportRequest,
-    user: User = Depends(get_current_user),
+    creds: Credentials = Depends(get_google_credentials),
 ):
-    if not user.google_token_encrypted:
-        raise HTTPException(status_code=400, detail="Cuenta Google no vinculada")
-
-    creds = credentials_from_encrypted(user.google_token_encrypted)
     fixer = SlidesFixer(credentials=creds)
     export_path, mime_type = fixer.export(body.presentation_id, body.format)
     return FileResponse(
@@ -173,17 +169,8 @@ def validation_history(
 
 @router.get("/history/{validation_id}")
 def get_validation(
-    validation_id: int,
-    user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    record: ValidationRecord = Depends(get_user_validation_record),
 ):
-    record = (
-        db.query(ValidationRecord)
-        .filter(ValidationRecord.id == validation_id, ValidationRecord.user_id == user.id)
-        .first()
-    )
-    if not record:
-        raise HTTPException(status_code=404, detail="Validación no encontrada")
     data = dict(record.result)
     data["validation_id"] = str(record.id)
     if not data.get("presentation_id") and record.presentation_id:
@@ -195,19 +182,9 @@ def get_validation(
 
 @router.get("/history/{validation_id}/report.pdf")
 def download_report_pdf(
-    validation_id: int,
-    user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    record: ValidationRecord = Depends(get_user_validation_record),
 ):
-    record = (
-        db.query(ValidationRecord)
-        .filter(ValidationRecord.id == validation_id, ValidationRecord.user_id == user.id)
-        .first()
-    )
-    if not record:
-        raise HTTPException(status_code=404, detail="Validación no encontrada")
-
-    pdf_path = generate_report_pdf(record.result, validation_id)
+    pdf_path = generate_report_pdf(record.result, record.id)
     return FileResponse(pdf_path, media_type="application/pdf", filename=pdf_path.name)
 
 
@@ -215,11 +192,7 @@ def download_report_pdf(
 def slide_thumbnail(
     presentation_id: str,
     slide_number: int,
-    user: User = Depends(get_current_user),
+    creds: Credentials = Depends(get_google_credentials),
 ):
-    if not user.google_token_encrypted:
-        raise HTTPException(status_code=400, detail="Cuenta Google no vinculada")
-
-    creds = credentials_from_encrypted(user.google_token_encrypted)
     image_path = get_slide_thumbnail(creds, presentation_id, slide_number)
     return FileResponse(image_path, media_type="image/png")

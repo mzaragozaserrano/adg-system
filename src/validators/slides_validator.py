@@ -1,9 +1,8 @@
 import re
 
 from google.oauth2.credentials import Credentials
-from googleapiclient.discovery import build
 
-from config.brand_guidelines import BRAND_FONT
+from src.integrations.google.clients import build_slides_client
 from src.services.presentation_cache import get_cached_presentation
 from src.slides.auth import get_google_credentials
 from src.validators.color_utils import (
@@ -11,15 +10,8 @@ from src.validators.color_utils import (
     is_allowed_palette_color,
     palette_violation_metadata,
 )
-from src.validators.header_text import validate_header_subtitle
 from src.validators.location import format_location
 from src.validators.models import Severity, ValidationIssue, ValidationResult
-from src.validators.rules import (
-    expected_font_description,
-    is_approved_font,
-    is_index_number,
-    is_top_left_aligned,
-)
 from src.validators.section_slides import (
     detect_section_slide,
     validate_section_sequence,
@@ -30,6 +22,7 @@ from src.validators.slides_text import (
     page_size_to_points,
     section_span_keys,
 )
+from src.validators.text_span_rules import TextSpanContext, validate_text_span
 
 
 def extract_presentation_id(url_or_id: str) -> str:
@@ -45,7 +38,7 @@ def extract_presentation_id(url_or_id: str) -> str:
 class SlidesValidator:
     def __init__(self, credentials: Credentials | None = None) -> None:
         creds = credentials or get_google_credentials()
-        self._service = build("slides", "v1", credentials=creds)
+        self._service = build_slides_client(creds)
         self._credentials = creds
 
     def validate(self, url_or_id: str) -> ValidationResult:
@@ -129,17 +122,22 @@ class SlidesValidator:
             issues.extend(self._validate_element_colors(element, slide_number))
 
         for bbox, text, span_data in raw_spans:
-            issues.extend(
-                self._validate_span(
-                    slide_number,
-                    text,
-                    bbox,
-                    span_data,
-                    page_width,
-                    page_height,
-                    is_section_span=(bbox, text) in section_keys,
-                )
+            ctx = TextSpanContext(
+                slide_number=slide_number,
+                text=text,
+                bbox=bbox,
+                page_width=page_width,
+                page_height=page_height,
+                font=span_data.get("font", ""),
+                size=span_data.get("size", 0.0),
+                flags=span_data.get("flags", 0),
+                color_hex=span_data.get("color_hex"),
+                location=format_location(bbox, page_width, page_height),
+                is_section_span=(bbox, text) in section_keys,
+                object_id=span_data.get("object_id"),
+                text_range=span_data.get("text_range"),
             )
+            issues.extend(validate_text_span(ctx))
 
         return issues
 
@@ -171,90 +169,4 @@ class SlidesValidator:
                         )
                     )
 
-        return issues
-
-    def _validate_span(
-        self,
-        slide_number: int,
-        text: str,
-        bbox: tuple,
-        span_data: dict,
-        page_width: float,
-        page_height: float,
-        is_section_span: bool = False,
-    ) -> list[ValidationIssue]:
-        issues: list[ValidationIssue] = []
-        font = span_data.get("font", "")
-        size = span_data.get("size", 0.0)
-        flags = span_data.get("flags", 0)
-        color_hex = span_data.get("color_hex")
-        object_id = span_data.get("object_id")
-        text_range = span_data.get("text_range")
-        location = format_location(bbox, page_width, page_height)
-        element = f"Texto «{text[:80]}»"
-
-        if color_hex and not color_hex.startswith("theme:"):
-            if not is_allowed_palette_color(color_hex):
-                palette = palette_violation_metadata(color_hex)
-                issues.append(
-                    ValidationIssue(
-                        slide_number=slide_number,
-                        category="color",
-                        message="Color de texto no permitido en la paleta ADG",
-                        severity=Severity.POSIBLE,
-                        element=element,
-                        location=location,
-                        text_preview=text[:80],
-                        object_id=object_id,
-                        text_range=text_range,
-                        fix_type="text_color" if object_id else None,
-                        fix_payload={"color": palette["color_suggested"]} if object_id else None,
-                        **palette,
-                    )
-                )
-
-        if font and not is_approved_font(font):
-            issues.append(
-                ValidationIssue(
-                    slide_number=slide_number,
-                    category="tipografía",
-                    message="Fuente no permitida",
-                    expected=expected_font_description(),
-                    actual=font,
-                    element=element,
-                    location=location,
-                    text_preview=text[:80],
-                    severity=Severity.GRAVE,
-                    object_id=object_id,
-                    text_range=text_range,
-                    fix_type="font_family" if object_id else None,
-                    fix_payload={"font_family": BRAND_FONT} if object_id else None,
-                )
-            )
-
-        if is_section_span:
-            return issues
-
-        if size <= 0:
-            return issues
-
-        if not is_top_left_aligned(bbox, page_width, page_height):
-            return issues
-
-        if is_index_number(text):
-            return issues
-
-        issues.extend(
-            validate_header_subtitle(
-                slide_number,
-                text,
-                font,
-                size,
-                flags,
-                color_hex,
-                location,
-                object_id=object_id,
-                text_range=text_range,
-            )
-        )
         return issues

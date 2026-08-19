@@ -19,11 +19,26 @@ def rgb_to_hex(red: float, green: float, blue: float) -> str:
     return f"#{r:02X}{g:02X}{b:02X}"
 
 
+def rgb_tuple_to_hex(rgb: tuple) -> str | None:
+    if not rgb or len(rgb) < 3:
+        return None
+    return rgb_to_hex(rgb[0], rgb[1], rgb[2])
+
+
 def int_to_hex(color_int: int) -> str:
     r = (color_int >> 16) & 0xFF
     g = (color_int >> 8) & 0xFF
     b = color_int & 0xFF
     return f"#{r:02X}{g:02X}{b:02X}"
+
+
+def hex_to_rgb_normalized(hex_color: str) -> dict:
+    h = hex_color.lstrip("#")
+    return {
+        "red": int(h[0:2], 16) / 255,
+        "green": int(h[2:4], 16) / 255,
+        "blue": int(h[4:6], 16) / 255,
+    }
 
 
 def hex_to_rgb(hex_color: str) -> tuple[float, float, float]:

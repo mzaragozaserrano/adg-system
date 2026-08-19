@@ -7,9 +7,10 @@ import tempfile
 import httpx
 from google.cloud import vision
 from google.oauth2.credentials import Credentials
-from googleapiclient.discovery import build
 
+from src.integrations.google.clients import build_drive_client, build_slides_client
 from src.services.presentation_cache import get_cached_presentation
+from src.validators.slides_text import emu_to_points
 
 
 _vision_client: vision.ImageAnnotatorClient | None = None
@@ -66,7 +67,7 @@ def _ocr_image_url(content_url: str) -> str:
 def _emu_to_pt(value: float | None) -> float:
     if value is None:
         return 0.0
-    return value / 914400 * 72
+    return emu_to_points(value)
 
 
 def _build_replace_requests(
@@ -142,8 +143,8 @@ def transcribe_slides(
     credentials: Credentials,
     min_words: int = 5,
 ) -> dict:
-    slides_service = build("slides", "v1", credentials=credentials)
-    drive_service = build("drive", "v3", credentials=credentials)
+    slides_service = build_slides_client(credentials)
+    drive_service = build_drive_client(credentials)
 
     presentation = get_cached_presentation(slides_service, presentation_id)
     slides = presentation.get("slides", [])
