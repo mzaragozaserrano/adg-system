@@ -25,7 +25,7 @@ import {
   similarIssueIds,
   slideSummary,
   slidesEditUrl,
-} from "./lib/validationUtils";
+} from "./utils/validationUtils";
 import ColorPaletteCompare from "./components/ColorPaletteCompare";
 import SimilarBulkDialog from "./components/SimilarBulkDialog";
 import SlideThumbnail, {
