@@ -1,7 +1,8 @@
-from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 from fastapi import HTTPException
 from google.oauth2.credentials import Credentials
+
+from src.integrations.google.clients import build_drive_client
 
 GOOGLE_SLIDES_MIME = "application/vnd.google-apps.presentation"
 
@@ -15,7 +16,7 @@ MIME_LABELS = {
 
 
 def assert_google_slides_file(credentials: Credentials, file_id: str) -> str:
-    drive = build("drive", "v3", credentials=credentials)
+    drive = build_drive_client(credentials)
     try:
         metadata = drive.files().get(fileId=file_id, fields="id,name,mimeType").execute()
     except HttpError as exc:

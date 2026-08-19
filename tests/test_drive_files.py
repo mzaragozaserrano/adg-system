@@ -17,7 +17,7 @@ def test_assert_google_slides_file_rejects_pdf():
         "name": "informe.pdf",
         "mimeType": "application/pdf",
     }
-    with patch("src.services.drive_files.build", return_value=drive):
+    with patch("src.services.drive_files.build_drive_client", return_value=drive):
         with pytest.raises(HTTPException) as exc:
             assert_google_slides_file(MagicMock(), "abc")
     assert exc.value.status_code == 400
@@ -31,6 +31,6 @@ def test_assert_google_slides_file_accepts_slides():
         "name": "presentacion",
         "mimeType": GOOGLE_SLIDES_MIME,
     }
-    with patch("src.services.drive_files.build", return_value=drive):
+    with patch("src.services.drive_files.build_drive_client", return_value=drive):
         name = assert_google_slides_file(MagicMock(), "abc")
     assert name == "presentacion"

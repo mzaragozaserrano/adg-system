@@ -145,6 +145,17 @@ def detect_section_slide(
     )
 
 
+def section_span_keys(section_slide: SectionSlideData | None) -> set[tuple]:
+    if not section_slide:
+        return set()
+    keys: set[tuple] = {(section_slide.number.bbox, section_slide.number.text)}
+    for title in section_slide.titles:
+        keys.add((title.bbox, title.text))
+    for subtitle in section_slide.subtitles:
+        keys.add((subtitle.bbox, subtitle.text))
+    return keys
+
+
 def validate_section_slide(data: SectionSlideData) -> list[ValidationIssue]:
     issues: list[ValidationIssue] = []
     issues.extend(_validate_section_number(data))

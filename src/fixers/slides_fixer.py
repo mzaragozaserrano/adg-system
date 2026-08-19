@@ -2,20 +2,13 @@ from pathlib import Path
 from typing import Any
 
 from google.oauth2.credentials import Credentials
-from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseDownload
 
 from config.settings import settings
+from src.integrations.google.clients import build_drive_client, build_slides_client
 from src.services.presentation_cache import invalidate_presentation_cache
+from src.validators.color_utils import hex_to_rgb_normalized
 from src.validators.models import FixResult, ValidationIssue
-
-
-def _hex_to_rgb_normalized(hex_color: str) -> dict:
-    hex_color = hex_color.lstrip("#")
-    r = int(hex_color[0:2], 16) / 255
-    g = int(hex_color[2:4], 16) / 255
-    b = int(hex_color[4:6], 16) / 255
-    return {"red": r, "green": g, "blue": b}
 
 
 def issue_from_fix_input(data: dict[str, Any]) -> ValidationIssue:
@@ -34,8 +27,8 @@ def issue_from_fix_input(data: dict[str, Any]) -> ValidationIssue:
 class SlidesFixer:
     def __init__(self, credentials: Credentials) -> None:
         self._credentials = credentials
-        self._slides = build("slides", "v1", credentials=credentials)
-        self._drive = build("drive", "v3", credentials=credentials)
+        self._slides = build_slides_client(credentials)
+        self._drive = build_drive_client(credentials)
 
     def create_working_copy(self, presentation_id: str) -> tuple[str, str]:
         source_name = self._get_file_name(presentation_id)
@@ -127,7 +120,7 @@ class SlidesFixer:
         elif issue.fix_type == "text_color":
             style["foregroundColor"] = {
                 "opaqueColor": {
-                    "rgbColor": _hex_to_rgb_normalized(issue.fix_payload["color"]),
+                    "rgbColor": hex_to_rgb_normalized(issue.fix_payload["color"]),
                 }
             }
             fields.append("foregroundColor")
@@ -145,7 +138,7 @@ class SlidesFixer:
                         "pageBackgroundFill": {
                             "solidFill": {
                                 "color": {
-                                    "rgbColor": _hex_to_rgb_normalized(issue.fix_payload["color"]),
+                                    "rgbColor": hex_to_rgb_normalized(issue.fix_payload["color"]),
                                 }
                             }
                         }
@@ -161,7 +154,7 @@ class SlidesFixer:
                         "shapeBackgroundFill": {
                             "solidFill": {
                                 "color": {
-                                    "rgbColor": _hex_to_rgb_normalized(issue.fix_payload["color"]),
+                                    "rgbColor": hex_to_rgb_normalized(issue.fix_payload["color"]),
                                 }
                             }
                         }

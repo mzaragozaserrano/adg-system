@@ -237,14 +237,4 @@ def collect_slides_text_spans(
     return spans
 
 
-def section_span_keys(section_slide) -> set[tuple[tuple[float, float, float, float], str]]:
-    if not section_slide:
-        return set()
-    keys: set[tuple[tuple[float, float, float, float], str]] = {
-        (section_slide.number.bbox, section_slide.number.text)
-    }
-    for title in section_slide.titles:
-        keys.add((title.bbox, title.text))
-    for subtitle in section_slide.subtitles:
-        keys.add((subtitle.bbox, subtitle.text))
-    return keys
+from src.validators.section_slides import section_span_keys as section_span_keys  # noqa: F401
