@@ -1,7 +1,10 @@
 from src.services.block_classifier import (
     BlockRole,
     _line_ordered_words,
+    classify_content_slide,
     classify_cover_slide,
+    filter_ocr_brand_noise,
+    is_ocr_brand_noise,
 )
 from src.services.ocr_blocks import OcrBlock, OcrWord
 
@@ -98,3 +101,39 @@ def test_line_ordered_words_corrects_y_variation():
 
     result = _line_ordered_words(words)
     assert [w.text for w in result] == ["compiten", "por", "ella", "."]
+
+
+def test_is_ocr_brand_noise_detects_variants():
+    assert is_ocr_brand_noise(_block("NotebookLM", y0=530, height=10))
+    assert is_ocr_brand_noise(_block("notebook lm", y0=530, height=10))
+    assert is_ocr_brand_noise(_block("ad gravity", y0=20, height=12, x0=700))
+    assert is_ocr_brand_noise(_block("ADGRAVITY", y0=20, height=12, x0=700))
+    assert not is_ocr_brand_noise(_block("TOTAL REACH", y0=280, height=55))
+
+
+def test_filter_ocr_brand_noise_removes_brand_blocks():
+    blocks = [
+        _block("TOTAL REACH", y0=280, height=55),
+        _block("ad gravity", y0=20, height=12, x0=700),
+        _block("NotebookLM", y0=530, height=10, x0=650),
+    ]
+    filtered = filter_ocr_brand_noise(blocks)
+    assert len(filtered) == 1
+    assert filtered[0].text == "TOTAL REACH"
+
+
+def test_classify_content_slide_omits_brand_noise():
+    blocks = [
+        _block("Estrategia de campaña", y0=40, height=40),
+        _block("adgravity", y0=10, height=12, x0=700),
+        _block("NotebookLM", y0=550, height=10, x0=650),
+        _block("Contenido del cuerpo de la diapositiva.", y0=120, height=20),
+    ]
+
+    classified = classify_content_slide(blocks, img_width=1024, img_height=576)
+    texts = [cb.block.text for cb in classified]
+
+    assert "adgravity" not in " ".join(texts).lower()
+    assert "notebooklm" not in " ".join(texts).lower()
+    assert any("Estrategia" in t for t in texts)
+    assert any("Contenido" in t for t in texts)

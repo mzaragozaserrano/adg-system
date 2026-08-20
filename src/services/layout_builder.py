@@ -22,6 +22,7 @@ from src.services.block_classifier import (
     ClassifiedBlock,
     classify_content_slide,
     classify_cover_slide,
+    filter_ocr_brand_noise,
     infer_cover_title_from_filename,
 )
 from src.services.content_mapper import (
@@ -274,7 +275,7 @@ def _ocr_page(image_bytes: bytes, drive_service=None) -> list[OcrBlock]:
     try:
         blocks = ocr_image_bytes_structured(image_bytes)
         logger.info("_ocr_page: Vision API — %d bloques (%d bytes)", len(blocks), len(image_bytes))
-        return blocks
+        return filter_ocr_brand_noise(blocks)
     except Exception as exc:
         logger.warning("_ocr_page: Vision API falló (%s), probando Drive OCR", exc)
 
@@ -282,7 +283,7 @@ def _ocr_page(image_bytes: bytes, drive_service=None) -> list[OcrBlock]:
         try:
             blocks = ocr_image_bytes_drive(image_bytes, drive_service)
             logger.info("_ocr_page: Drive OCR — %d bloques", len(blocks))
-            return blocks
+            return filter_ocr_brand_noise(blocks)
         except Exception as exc:
             logger.error("_ocr_page: Drive OCR también falló: %s", exc)
 
