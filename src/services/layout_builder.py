@@ -362,7 +362,8 @@ def _add_blank_slide(
     presentation_id: str,
     insertion_index: int,
     layout_id: str | None,
-) -> str | None:
+) -> tuple[str | None, str]:
+    """Devuelve (objectId, error_msg). error_msg vacío si tuvo éxito."""
     slide_id = f"slide_{uuid.uuid4().hex[:16]}"
 
     attempts: list[dict] = []
@@ -390,22 +391,25 @@ def _add_blank_slide(
         },
     ]
 
+    last_error = ""
     for attempt in attempts:
         try:
             slides_service.presentations().batchUpdate(
                 presentationId=presentation_id,
                 body={"requests": [attempt]},
             ).execute()
-            return slide_id
+            return slide_id, ""
         except Exception as exc:
+            last_error = str(exc)
             logger.warning("addSlide falló (idx=%d): %s", insertion_index, exc)
 
     logger.error(
-        "No se pudo añadir diapositiva en índice %d para presentación %s",
+        "No se pudo añadir diapositiva en índice %d para presentación %s: %s",
         insertion_index,
         presentation_id,
+        last_error,
     )
-    return None
+    return None, last_error
 
 
 def _init_from_template(
@@ -563,6 +567,7 @@ def build_layout(
 
     content_pages = page_images[1:]
     skipped: list[int] = []
+    first_add_slide_error: str = ""
 
     logger.info(
         "build_layout: %d páginas de contenido a procesar (insert_index=%d, layout_id=%s)",
@@ -573,10 +578,12 @@ def build_layout(
         slide_number = idx + 2
         insertion_index = content_insert_index + idx
 
-        page_id = _add_blank_slide(slides_service, new_id, insertion_index, layout_id)
+        page_id, err = _add_blank_slide(slides_service, new_id, insertion_index, layout_id)
 
         if not page_id:
-            logger.error("Slide %d: _add_blank_slide devolvió None, se omite", slide_number)
+            if not first_add_slide_error:
+                first_add_slide_error = err
+            logger.error("Slide %d: _add_blank_slide devolvió None: %s", slide_number, err)
             skipped.append(slide_number)
             continue
 
@@ -597,6 +604,12 @@ def build_layout(
                 logger.info("Slide %d: %d requests aplicados", slide_number, len(content_requests))
             except Exception as exc:
                 logger.error("Slide %d: error al aplicar contenido: %s", slide_number, exc)
+
+    if first_add_slide_error and len(skipped) == len(content_pages):
+        raise RuntimeError(
+            f"addSlide falló en todas las diapositivas de contenido. "
+            f"Primer error: {first_add_slide_error}"
+        )
 
     url = f"https://docs.google.com/presentation/d/{new_id}/edit"
     current_pres = slides_service.presentations().get(presentationId=new_id).execute()
