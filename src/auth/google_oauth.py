@@ -5,6 +5,7 @@ import httpx
 from authlib.integrations.starlette_client import OAuth
 from fastapi import HTTPException
 from google_auth_oauthlib.flow import Flow
+from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
 
 os.environ["OAUTHLIB_RELAX_TOKEN_SCOPE"] = "1"
 
@@ -12,8 +13,8 @@ from config.settings import GOOGLE_SCOPES_FULL, settings
 from src.auth.security import decrypt_token, encrypt_token, allowed_email_hint, is_allowed_email
 
 oauth = OAuth()
-
-_pending_flows: dict[str, Flow] = {}
+_OAUTH_COOKIE_SALT = "adg-oauth-state"
+_OAUTH_COOKIE_MAX_AGE = 600
 
 if settings.google_client_id and settings.google_client_secret:
     oauth.register(
@@ -23,6 +24,24 @@ if settings.google_client_id and settings.google_client_secret:
         server_metadata_url="https://accounts.google.com/.well-known/openid-configuration",
         client_kwargs={"scope": "openid email profile " + " ".join(GOOGLE_SCOPES_FULL)},
     )
+
+
+def _oauth_serializer() -> URLSafeTimedSerializer:
+    return URLSafeTimedSerializer(settings.secret_key, salt=_OAUTH_COOKIE_SALT)
+
+
+def dump_oauth_session(state: str, code_verifier: str) -> str:
+    return _oauth_serializer().dumps({"state": state, "verifier": code_verifier})
+
+
+def load_oauth_session(token: str) -> dict:
+    try:
+        return _oauth_serializer().loads(token, max_age=_OAUTH_COOKIE_MAX_AGE)
+    except (BadSignature, SignatureExpired) as exc:
+        raise HTTPException(
+            status_code=400,
+            detail="Sesión OAuth inválida. Vuelve a iniciar sesión.",
+        ) from exc
 
 
 def get_oauth_flow() -> Flow:
@@ -45,17 +64,25 @@ def get_oauth_flow() -> Flow:
     return flow
 
 
-def build_google_auth_url(state: str, force_consent: bool = False) -> str:
+def build_google_auth_url(
+    state: str,
+    force_consent: bool = False,
+    login_hint: str = "",
+) -> tuple[str, str]:
     flow = get_oauth_flow()
-    prompt = "consent" if force_consent else "select_account"
-    auth_url, _ = flow.authorization_url(
-        access_type="offline",
-        include_granted_scopes="true",
-        prompt=prompt,
-        state=state,
-    )
-    _pending_flows[state] = flow
-    return auth_url
+    if force_consent:
+        prompt = "consent"
+    else:
+        prompt = "select_account consent"
+    kwargs: dict = {
+        "access_type": "offline",
+        "prompt": prompt,
+        "state": state,
+    }
+    if login_hint:
+        kwargs["login_hint"] = login_hint
+    auth_url, _ = flow.authorization_url(**kwargs)
+    return auth_url, flow.code_verifier or ""
 
 
 def _fetch_user_info(access_token: str) -> dict:
@@ -72,10 +99,10 @@ def _fetch_user_info(access_token: str) -> dict:
     return response.json()
 
 
-def exchange_google_code(code: str, state: str) -> tuple[dict, dict]:
-    flow = _pending_flows.pop(state, None)
-    if flow is None:
-        raise HTTPException(status_code=400, detail="Sesión OAuth expirada. Vuelve a iniciar sesión.")
+def exchange_google_code(code: str, code_verifier: str = "") -> tuple[dict, dict]:
+    flow = get_oauth_flow()
+    if code_verifier:
+        flow.code_verifier = code_verifier
     try:
         flow.fetch_token(code=code)
     except Exception as exc:

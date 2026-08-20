@@ -83,31 +83,24 @@ El selector de Drive usa **Google Picker** en el frontend. Si falla con *The API
 4. El **número de proyecto** (`GOOGLE_APP_ID` / `VITE_GOOGLE_APP_ID`) debe ser el de el mismo proyecto GCP que el OAuth client.
 5. En **Vercel**, define `VITE_GOOGLE_API_KEY` y `VITE_GOOGLE_APP_ID` (no basta con tenerlas solo en Render).
 
-### Publicar OAuth para que cualquier `@adgravity.com` pueda entrar
+### Evitar «configuración avanzada / sitio no seguro»
 
-Si al iniciar sesión aparece *"no ha completado la verificación de Google"* o *"solo los testers pueden probarlo"*, la pantalla de consentimiento OAuth está en modo **Prueba (Testing)**. Eso no se arregla en Vercel ni en Render: hay que cambiarlo en Google Cloud Console.
+Esa pantalla **no la genera ADG**: la muestra Google porque la app OAuth está en modo **Prueba** y pide permisos sensibles (Drive/Slides). No se quita con un cambio de código.
 
-**Opción recomendada — App interna (Google Workspace)**
+**Lo que hay que hacer en Google Cloud (una sola vez):**
 
-Si `adgravity.com` es un dominio de Google Workspace y el proyecto GCP pertenece a esa organización:
+1. Entra en [Google Cloud Console](https://console.cloud.google.com/) con una cuenta admin de `adgravity.com`.
+2. Elige el proyecto de OAuth → **APIs y servicios** → **Pantalla de consentimiento de OAuth**.
+3. En **Tipo de usuario** elige **Interno**.
+   - El proyecto GCP tiene que pertenecer a la organización Google Workspace de ADG.
+   - Si el tipo Interno no aparece, el proyecto está en una cuenta personal: hay que crear/usar un proyecto de la organización.
+4. Guarda.
 
-1. [Google Cloud Console](https://console.cloud.google.com/) → **APIs y servicios** → **Pantalla de consentimiento de OAuth**.
-2. En **Tipo de usuario**, elige **Interno** (solo usuarios de tu organización).
-3. Guarda. No hace falta verificación de Google ni lista de testers: cualquier cuenta `@adgravity.com` de la organización puede autenticarse.
+Con tipo **Interno**, los empleados `@adgravity.com` dejan de ver «esta app no está verificada» y no hace falta «Configuración avanzada». Tampoco hace falta la verificación pública de Google.
 
-**Opción alternativa — Publicar en producción**
+**No sirve** publicar la app como Externa en Prueba: Drive (`drive.readonly`) es un alcance restringido y Google seguirá mostrando la advertencia hasta verificar la app (proceso largo). Para una herramienta interna, **Interno** es la solución correcta.
 
-Si el proyecto GCP no puede ser interno (cuenta personal u otra organización):
-
-1. **Pantalla de consentimiento de OAuth** → revisa que el dominio autorizado incluya `adgravity.com`.
-2. Pulsa **Publicar aplicación** (cambiar de *Prueba* a *En producción*).
-3. Los scopes de Drive y Slides pueden exigir **verificación de Google** (formulario, varios días). Hasta que aprueben, Google puede limitar usuarios o mostrar advertencias.
-
-**Solución temporal (solo mientras está en Prueba)**
-
-En la misma pantalla, sección **Usuarios de prueba**, añade cada correo que necesite acceder (p. ej. `lauza.zaragoza@adgravity.com`). Máximo 100 usuarios en modo Prueba.
-
-Tras cambiar el estado de la app OAuth, no hace falta redesplegar la API: el cambio es inmediato en Google.
+Si alguien sigue viendo la advertencia: confirma que entra con `@adgravity.com` (no Gmail personal) y que el cliente OAuth es el del mismo proyecto marcado como Interno.
 
 ## Variables de entorno
 
