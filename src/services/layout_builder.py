@@ -228,6 +228,22 @@ def _build_content_slide_requests(
                 )
             )
 
+        if not title_text and not body_parts:
+            requests.extend(
+                _text_box_request(
+                    object_id=f"{prefix}_empty",
+                    page_id=page_id,
+                    text=" ",
+                    x_pt=MARGIN_LEFT_PT,
+                    y_pt=MARGIN_TOP_PT,
+                    w_pt=CONTENT_W_PT,
+                    h_pt=TITLE_H_PT,
+                    font_size=TITLE_FONT_SIZE,
+                    color_hex=TITLE_COLOR,
+                    bold=True,
+                )
+            )
+
     return requests
 
 
@@ -527,14 +543,11 @@ def build_layout(
             continue
 
         blocks = _ocr_page(img_bytes)
-        if not blocks:
-            skipped.append(slide_number)
-            continue
 
         img_w, img_h = 1024.0, 576.0
-        classified = classify_content_slide(blocks, img_w, img_h)
+        classified = classify_content_slide(blocks, img_w, img_h) if blocks else []
 
-        content_requests = _build_content_slide_requests(page_id, classified, slide_number)
+        content_requests = _build_content_slide_requests(page_id, classified, idx)
         if content_requests:
             slides_service.presentations().batchUpdate(
                 presentationId=new_id,
