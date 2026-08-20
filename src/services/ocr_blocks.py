@@ -105,8 +105,8 @@ def ocr_image_bytes_structured(image_bytes: bytes) -> list[OcrBlock]:
         for block in page.blocks:
             if block.block_type != vision.Block.BlockType.TEXT:
                 continue
-            ocr_block = OcrBlock()
             for paragraph in block.paragraphs:
+                ocr_block = OcrBlock()
                 for word in paragraph.words:
                     word_text = "".join(
                         symbol.text for symbol in word.symbols
@@ -119,8 +119,8 @@ def ocr_image_bytes_structured(image_bytes: bytes) -> list[OcrBlock]:
                     ocr_block.words.append(
                         OcrWord(text=word_text, x0=x0, y0=y0, x1=x1, y1=y1)
                     )
-            if ocr_block.words:
-                blocks.append(ocr_block)
+                if ocr_block.words:
+                    blocks.append(ocr_block)
 
     return blocks
 

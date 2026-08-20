@@ -33,10 +33,8 @@ def map_cover_to_slots(
     if title_slots and title_text:
         mapping[title_slots[0].object_id] = title_text
 
-    if subtitle_slots and subtitle_text:
+    if subtitle_slots:
         mapping[subtitle_slots[0].object_id] = subtitle_text
-    elif subtitle_slots and title_text and not subtitle_text:
-        pass
 
     return mapping
 
@@ -87,11 +85,12 @@ def build_replace_requests(
                 "textRange": {"type": "ALL"},
             }
         })
-        requests.append({
-            "insertText": {
-                "objectId": object_id,
-                "insertionIndex": 0,
-                "text": new_text,
-            }
-        })
+        if new_text:
+            requests.append({
+                "insertText": {
+                    "objectId": object_id,
+                    "insertionIndex": 0,
+                    "text": new_text,
+                }
+            })
     return requests
