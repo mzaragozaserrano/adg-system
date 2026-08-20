@@ -1,11 +1,16 @@
 from __future__ import annotations
 
+import io
+import logging
 import os
 import tempfile
 from dataclasses import dataclass, field
 
 import httpx
 from google.cloud import vision
+from googleapiclient.http import MediaIoBaseUpload
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -121,3 +126,70 @@ def ocr_url_structured(content_url: str) -> list[OcrBlock]:
     response = httpx.get(content_url, follow_redirects=True, timeout=30.0)
     response.raise_for_status()
     return ocr_image_bytes_structured(response.content)
+
+
+def _text_lines_to_blocks(text: str, img_w: float = 1024.0) -> list[OcrBlock]:
+    """Convierte texto plano en OcrBlocks con posiciones heurísticas."""
+    lines = [l.strip() for l in text.splitlines() if l.strip()]
+    if not lines:
+        return []
+
+    blocks: list[OcrBlock] = []
+    for i, line in enumerate(lines):
+        if i == 0:
+            y0, y1 = 20.0, 70.0
+        elif i == 1:
+            y0, y1 = 75.0, 110.0
+        else:
+            y0 = 115.0 + (i - 2) * 22.0
+            y1 = y0 + 20.0
+
+        block = OcrBlock()
+        block.words.append(OcrWord(text=line, x0=20.0, y0=y0, x1=img_w - 20.0, y1=y1))
+        blocks.append(block)
+
+    return blocks
+
+
+def _detect_image_mime(image_bytes: bytes) -> str:
+    if image_bytes[:3] == b"\xff\xd8\xff":
+        return "image/jpeg"
+    if image_bytes[:8] == b"\x89PNG\r\n\x1a\n":
+        return "image/png"
+    return "image/jpeg"
+
+
+def ocr_image_bytes_drive(image_bytes: bytes, drive_service) -> list[OcrBlock]:
+    """OCR usando Google Drive: sube la imagen como Google Doc (activa OCR automático)
+    y exporta el texto resultante. Funciona con credenciales OAuth del usuario
+    sin necesidad de cuenta de servicio de Vision API.
+    """
+    mime = _detect_image_mime(image_bytes)
+    buf = io.BytesIO(image_bytes)
+    media = MediaIoBaseUpload(buf, mimetype=mime, resumable=False)
+    doc_meta = {
+        "name": "_adg_ocr_tmp",
+        "mimeType": "application/vnd.google-apps.document",
+    }
+
+    doc = drive_service.files().create(
+        body=doc_meta,
+        media_body=media,
+        fields="id",
+    ).execute()
+    doc_id = doc["id"]
+
+    try:
+        raw = drive_service.files().export(
+            fileId=doc_id,
+            mimeType="text/plain",
+        ).execute()
+        text = raw.decode("utf-8") if isinstance(raw, bytes) else str(raw)
+        logger.info("ocr_image_bytes_drive: %d chars extraídos", len(text))
+    finally:
+        try:
+            drive_service.files().delete(fileId=doc_id).execute()
+        except Exception:
+            pass
+
+    return _text_lines_to_blocks(text)
