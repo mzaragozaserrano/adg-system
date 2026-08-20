@@ -57,6 +57,50 @@ def _char_count(block: OcrBlock) -> int:
     return len(block.text.strip())
 
 
+def _is_mostly_uppercase(text: str) -> bool:
+    letters = [c for c in text if c.isalpha()]
+    if not letters:
+        return False
+    upper = sum(1 for c in letters if c.isupper())
+    return upper / len(letters) >= 0.7
+
+
+def _looks_like_subtitle(text: str) -> bool:
+    stripped = text.strip()
+    if not stripped:
+        return False
+    if stripped.endswith((".", "?", "!")):
+        return True
+    if not _is_mostly_uppercase(stripped) and _word_count_text(stripped) >= 4:
+        return True
+    return False
+
+
+def _word_count_text(text: str) -> int:
+    return len(text.split())
+
+
+def _is_cover_noise(block: OcrBlock, img_width: float, img_height: float) -> bool:
+    text = block.text.strip().lower()
+    if any(token in text for token in ("notebooklm", "ad gravity", "adgravity", "adg media")):
+        return True
+    if block.y1 > img_height * 0.88:
+        return True
+    if block.y0 < img_height * 0.08 and block.x0 > img_width * 0.55:
+        return True
+    if block.height < img_height * 0.035 and len(text) < 20:
+        return True
+    return False
+
+
+def _merge_blocks(blocks: list[OcrBlock]) -> OcrBlock:
+    merged = OcrBlock()
+    for block in blocks:
+        merged.words.extend(block.words)
+    merged.words.sort(key=lambda w: (w.y0, w.x0))
+    return merged
+
+
 def classify_cover_slide(
     blocks: list[OcrBlock],
     img_width: float,
@@ -65,36 +109,62 @@ def classify_cover_slide(
     if not blocks:
         return []
 
-    sorted_by_height = sorted(blocks, key=lambda b: b.height, reverse=True)
-    max_h = sorted_by_height[0].height if sorted_by_height else 1.0
+    main_blocks = [
+        b for b in blocks
+        if b.text.strip() and not _is_cover_noise(b, img_width, img_height)
+    ]
+    if not main_blocks:
+        main_blocks = [b for b in blocks if b.text.strip()]
 
-    scored: list[tuple[float, OcrBlock]] = []
-    for block in blocks:
-        score = (block.height / max(max_h, 1)) * 0.6
-        if _is_centered(block, img_width):
-            score += 0.2
-        if _word_count(block) <= 10:
-            score += 0.1
-        if block.y0 < img_height * 0.6:
-            score += 0.1
-        scored.append((score, block))
+    sorted_blocks = sorted(main_blocks, key=lambda b: b.y0)
+    max_h = max(b.height for b in sorted_blocks)
 
-    scored.sort(key=lambda x: (-x[0], x[1].y0))
-    result: list[ClassifiedBlock] = []
-    assigned_title = False
+    title_lines: list[OcrBlock] = []
+    subtitle_block: OcrBlock | None = None
 
-    for score, block in scored:
+    for block in sorted_blocks:
         text = block.text.strip()
-        if not text:
-            continue
+        rel_h = block.height / max(max_h, 1)
 
-        if not assigned_title and score >= 0.5:
-            result.append(ClassifiedBlock(block=block, role=BlockRole.COVER_TITLE, confidence=score))
-            assigned_title = True
-        elif assigned_title and len(result) == 1 and score >= 0.3:
-            result.append(ClassifiedBlock(block=block, role=BlockRole.COVER_SUBTITLE, confidence=score))
-        else:
-            result.append(ClassifiedBlock(block=block, role=BlockRole.BODY, confidence=score))
+        if _looks_like_subtitle(text) and title_lines:
+            subtitle_block = block
+            break
+
+        if rel_h >= 0.55 or (_is_mostly_uppercase(text) and rel_h >= 0.35):
+            title_lines.append(block)
+        elif not title_lines and rel_h >= 0.35:
+            title_lines.append(block)
+        elif title_lines and not subtitle_block and rel_h >= 0.25:
+            subtitle_block = block
+            break
+
+    if not subtitle_block and title_lines:
+        remaining = [b for b in sorted_blocks if b not in title_lines]
+        for block in remaining:
+            if _looks_like_subtitle(block.text):
+                subtitle_block = block
+                break
+
+    result: list[ClassifiedBlock] = []
+    if title_lines:
+        merged = _merge_blocks(title_lines)
+        result.append(ClassifiedBlock(
+            block=merged,
+            role=BlockRole.COVER_TITLE,
+            confidence=0.9,
+        ))
+
+    if subtitle_block:
+        result.append(ClassifiedBlock(
+            block=subtitle_block,
+            role=BlockRole.COVER_SUBTITLE,
+            confidence=0.85,
+        ))
+
+    assigned = {id(cb.block) for cb in result}
+    for block in sorted_blocks:
+        if id(block) not in assigned and block is not subtitle_block and block not in title_lines:
+            result.append(ClassifiedBlock(block=block, role=BlockRole.BODY, confidence=0.5))
 
     return result
 
