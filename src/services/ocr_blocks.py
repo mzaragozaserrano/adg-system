@@ -9,6 +9,7 @@ from dataclasses import dataclass, field
 import httpx
 from google.cloud import vision
 from googleapiclient.http import MediaIoBaseUpload
+import fitz
 
 logger = logging.getLogger(__name__)
 
@@ -20,11 +21,13 @@ class OcrWord:
     y0: float
     x1: float
     y1: float
+    color: tuple[int, int, int] | None = None
 
 
 @dataclass
 class OcrBlock:
     words: list[OcrWord] = field(default_factory=list)
+    color: tuple[int, int, int] | None = None
 
     @property
     def text(self) -> str:
@@ -122,6 +125,78 @@ def ocr_image_bytes_structured(image_bytes: bytes) -> list[OcrBlock]:
     return blocks
 
 
+def _is_light_color(rgb: tuple[int, int, int], threshold: int = 200) -> bool:
+    r, g, b = rgb
+    return r >= threshold and g >= threshold and b >= threshold
+
+
+def _detect_image_mime(image_bytes: bytes) -> str:
+    if image_bytes[:3] == b"\xff\xd8\xff":
+        return "image/jpeg"
+    if image_bytes[:8] == b"\x89PNG\r\n\x1a\n":
+        return "image/png"
+    return "image/jpeg"
+
+
+def _sample_text_color(
+    pix: fitz.Pixmap,
+    x0: float,
+    y0: float,
+    x1: float,
+    y1: float,
+) -> tuple[int, int, int] | None:
+    w, h = pix.width, pix.height
+    ix0 = max(0, min(w - 1, int(x0)))
+    iy0 = max(0, min(h - 1, int(y0)))
+    ix1 = max(ix0 + 1, min(w, int(x1)))
+    iy1 = max(iy0 + 1, min(h, int(y1)))
+
+    samples: list[tuple[int, int, int]] = []
+    x_step = max(1, (ix1 - ix0) // 8)
+    y_step = max(1, (iy1 - iy0) // 4)
+    for y in range(iy0, iy1, y_step):
+        for x in range(ix0, ix1, x_step):
+            pixel = pix.pixel(x, y)
+            rgb = (int(pixel[0]), int(pixel[1]), int(pixel[2]))
+            if not _is_light_color(rgb):
+                samples.append(rgb)
+
+    if not samples:
+        return None
+
+    rs = sorted(r for r, _, _ in samples)
+    gs = sorted(g for _, g, _ in samples)
+    bs = sorted(b for _, _, b in samples)
+    mid = len(samples) // 2
+    return (rs[mid], gs[mid], bs[mid])
+
+
+def enrich_blocks_with_colors(blocks: list[OcrBlock], image_bytes: bytes) -> None:
+    if not blocks or not image_bytes:
+        return
+
+    filetype = "png" if _detect_image_mime(image_bytes) == "image/png" else "jpeg"
+    doc = fitz.open(stream=image_bytes, filetype=filetype)
+    try:
+        pix = doc[0].get_pixmap(alpha=False)
+    finally:
+        doc.close()
+
+    for block in blocks:
+        colors: list[tuple[int, int, int]] = []
+        for word in block.words:
+            color = _sample_text_color(pix, word.x0, word.y0, word.x1, word.y1)
+            if color:
+                word.color = color
+                colors.append(color)
+        if colors:
+            block.color = (
+                sum(c[0] for c in colors) // len(colors),
+                sum(c[1] for c in colors) // len(colors),
+                sum(c[2] for c in colors) // len(colors),
+            )
+
+
 def ocr_url_structured(content_url: str) -> list[OcrBlock]:
     response = httpx.get(content_url, follow_redirects=True, timeout=30.0)
     response.raise_for_status()
@@ -149,14 +224,6 @@ def _text_lines_to_blocks(text: str, img_w: float = 1024.0) -> list[OcrBlock]:
         blocks.append(block)
 
     return blocks
-
-
-def _detect_image_mime(image_bytes: bytes) -> str:
-    if image_bytes[:3] == b"\xff\xd8\xff":
-        return "image/jpeg"
-    if image_bytes[:8] == b"\x89PNG\r\n\x1a\n":
-        return "image/png"
-    return "image/jpeg"
 
 
 def ocr_image_bytes_drive(image_bytes: bytes, drive_service) -> list[OcrBlock]:
