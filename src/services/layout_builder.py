@@ -28,7 +28,12 @@ from src.services.content_mapper import (
     build_replace_requests,
     map_cover_to_slots,
 )
-from src.services.ocr_blocks import OcrBlock, ocr_image_bytes_drive, ocr_image_bytes_structured
+from src.services.ocr_blocks import (
+    OcrBlock,
+    enrich_blocks_with_colors,
+    ocr_image_bytes_drive,
+    ocr_image_bytes_structured,
+)
 from src.services.slide_images import (
     download_drive_pdf,
     pdf_bytes_to_page_images,
@@ -299,6 +304,7 @@ def _detect_cover_text(
     if page_images:
         cover_blocks = _ocr_page(page_images[0], drive_service=drive_service)
         if cover_blocks:
+            enrich_blocks_with_colors(cover_blocks, page_images[0])
             img_w = max(b.x1 for b in cover_blocks) or 1024.0
             img_h = max(b.y1 for b in cover_blocks) or 576.0
             classified = classify_cover_slide(cover_blocks, img_w, img_h)
