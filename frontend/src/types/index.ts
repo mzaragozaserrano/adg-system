@@ -43,6 +43,15 @@ export interface BulkPromptState {
   similarIds: string[];
 }
 
+export interface LayoutBuildResult {
+  presentation_url: string;
+  presentation_id: string;
+  slides_processed: number;
+  skipped_slides: number[];
+  cover_title: string;
+  cover_subtitle: string;
+}
+
 export interface TranscribeResult {
   slides: Array<{
     slide_number: number;

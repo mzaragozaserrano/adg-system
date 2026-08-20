@@ -50,6 +50,81 @@ export function isGoogleSlidesMime(mimeType: string): boolean {
   return mimeType === SLIDES_MIME;
 }
 
+export function isPdfMime(mimeType: string): boolean {
+  return mimeType === "application/pdf";
+}
+
+export function isLayoutSourceMime(mimeType: string): boolean {
+  return isGoogleSlidesMime(mimeType) || isPdfMime(mimeType);
+}
+
+export async function openLayoutSourcePicker(config: PickerConfig): Promise<PickerFile | null> {
+  await ensurePickerApi();
+  const google = (window as any).google;
+  if (!google?.picker) throw new Error("Google Picker no disponible");
+
+  if (!config.api_key?.trim()) {
+    throw new Error("Falta la API key del Picker (VITE_GOOGLE_API_KEY).");
+  }
+
+  return new Promise((resolve, reject) => {
+    try {
+      const slidesView = new google.picker.DocsView(google.picker.ViewId.PRESENTATIONS)
+        .setIncludeFolders(false)
+        .setMimeTypes(SLIDES_MIME)
+        .setSelectFolderEnabled(false);
+
+      const pdfView = new google.picker.DocsView()
+        .setIncludeFolders(false)
+        .setMimeTypes("application/pdf")
+        .setSelectFolderEnabled(false);
+
+      const picker = new google.picker.PickerBuilder()
+        .addView(slidesView)
+        .addView(pdfView)
+        .setOAuthToken(config.access_token)
+        .setDeveloperKey(config.api_key.trim())
+        .setAppId(config.app_id.trim())
+        .setOrigin(getPickerOrigin())
+        .setTitle("Seleccionar presentación o PDF")
+        .setCallback((data: any) => {
+          if (data[google.picker.Response.ERROR]) {
+            const code = data[google.picker.Response.ERROR];
+            if (code === "developerKeyInvalid" || String(code).toLowerCase().includes("developer")) {
+              reject(
+                new Error(
+                  "La API key de Google Picker no es válida para este dominio. " +
+                    "Usa una key tipo «Aplicación web» con referrer " +
+                    `${getPickerOrigin()}/* y habilita Google Picker API en GCP.`
+                )
+              );
+              return;
+            }
+            reject(new Error(`Error de Google Picker: ${code}`));
+            return;
+          }
+          if (data.action === google.picker.Action.PICKED && data.docs?.[0]) {
+            const doc = data.docs[0];
+            resolve({
+              id: doc.id,
+              name: doc.name,
+              mimeType: doc.mimeType,
+            });
+            return;
+          }
+          if (data.action === google.picker.Action.CANCEL) {
+            resolve(null);
+          }
+        })
+        .build();
+
+      picker.setVisible(true);
+    } catch (error) {
+      reject(error);
+    }
+  });
+}
+
 function getPickerOrigin(): string {
   return `${window.location.protocol}//${window.location.host}`;
 }

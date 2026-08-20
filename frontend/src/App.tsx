@@ -1,19 +1,26 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import { Navigate, Route, Routes, useNavigate, useSearchParams } from "react-router-dom";
 import {
+  buildLayout,
   downloadReportPdf,
   fetchHistory,
   fetchValidation,
   fixPresentation,
   googleLoginUrl,
-  transcribeSlides,
   validateSlides,
 } from "./api";
-import { describeMimeType, isGoogleSlidesMime, openSlidesPicker } from "./googlePicker";
+import {
+  describeMimeType,
+  isGoogleSlidesMime,
+  isLayoutSourceMime,
+  isPdfMime,
+  openLayoutSourcePicker,
+  openSlidesPicker,
+} from "./googlePicker";
 import { resolvePickerConfig } from "./pickerConfig";
 import { useAuth } from "./auth";
 
-import type { BulkPromptState, FixState, Issue, TranscribeResult, ValidationResult } from "./types";
+import type { BulkPromptState, FixState, Issue, LayoutBuildResult, ValidationResult } from "./types";
 import {
   buildColorOverridesForIssues,
   buildFixPayload,
@@ -44,7 +51,7 @@ function LoginPage() {
       <div className="login-card">
         <div className="badge">ADG System · v2.1</div>
         <h1>ADG System</h1>
-        <p>Accede con tu cuenta corporativa de Google para acceder a las herramientas de validación y transcripción.</p>
+        <p>Accede con tu cuenta corporativa de Google para acceder a las herramientas de maquetación y validación.</p>
         <a className="btn btn-primary" href={googleLoginUrl()}>
           Iniciar sesión con Google
         </a>
@@ -700,83 +707,55 @@ function ValidatorDashboard({ onBack }: { onBack?: () => void }) {
   );
 }
 
-function TranscriberDashboard({ onBack }: { onBack?: () => void }) {
+function MaquetadorDashboard({ onBack }: { onBack?: () => void }) {
   const { user, logout } = useAuth();
-  const [slidesUrl, setSlidesUrl] = useState("");
-  const [selectedSlidesName, setSelectedSlidesName] = useState("");
-  const [totalSlides, setTotalSlides] = useState<number | null>(null);
-  const [selectedSlides, setSelectedSlides] = useState<Set<number>>(new Set());
-  const [newDocument, setNewDocument] = useState(false);
+  const [sourceUrl, setSourceUrl] = useState("");
+  const [sourceName, setSourceName] = useState("");
+  const [sourceType, setSourceType] = useState<"slides" | "pdf">("slides");
+  const [titleOverride, setTitleOverride] = useState("");
+  const [subtitleOverride, setSubtitleOverride] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [result, setResult] = useState<TranscribeResult | null>(null);
+  const [result, setResult] = useState<LayoutBuildResult | null>(null);
 
   async function handlePickFromDrive() {
     setError("");
     try {
       const config = await resolvePickerConfig();
-      const picked = await openSlidesPicker(config);
+      const picked = await openLayoutSourcePicker(config);
       if (!picked) return;
-      if (!isGoogleSlidesMime(picked.mimeType)) {
-        setError(`El archivo «${picked.name}» no es una presentación de Google Slides (tipo detectado: ${describeMimeType(picked.mimeType)}).`);
+      if (!isLayoutSourceMime(picked.mimeType)) {
+        setError(
+          `El archivo «${picked.name}» no es compatible (tipo detectado: ${describeMimeType(picked.mimeType)}). Usa Google Slides o PDF.`
+        );
         return;
       }
-      setSlidesUrl(picked.id);
-      setSelectedSlidesName(picked.name);
-      setTotalSlides(null);
-      setSelectedSlides(new Set());
+      setSourceUrl(picked.id);
+      setSourceName(picked.name);
+      setSourceType(isPdfMime(picked.mimeType) ? "pdf" : "slides");
       setResult(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : "No se pudo abrir Google Drive");
     }
   }
 
-  async function handleFetchSlideCount() {
-    const target = slidesUrl.trim();
+  async function handleBuildLayout() {
+    const target = sourceUrl.trim();
     if (!target) return;
-    setLoading(true);
-    setError("");
-    try {
-      const data = await validateSlides(target);
-      setTotalSlides(data.total_slides ?? 0);
-      setSelectedSlides(new Set());
-      setResult(null);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "No se pudo obtener información de la presentación");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  function toggleSlide(n: number) {
-    setSelectedSlides((prev) => {
-      const next = new Set(prev);
-      if (next.has(n)) next.delete(n);
-      else next.add(n);
-      return next;
-    });
-  }
-
-  function toggleAll() {
-    if (!totalSlides) return;
-    if (selectedSlides.size === totalSlides) {
-      setSelectedSlides(new Set());
-    } else {
-      setSelectedSlides(new Set(Array.from({ length: totalSlides }, (_, i) => i + 1)));
-    }
-  }
-
-  async function handleTranscribe() {
-    const target = slidesUrl.trim();
-    if (!target || selectedSlides.size === 0) return;
     setLoading(true);
     setError("");
     setResult(null);
     try {
-      const data = await transcribeSlides(target, Array.from(selectedSlides).sort((a, b) => a - b), newDocument);
+      const data = await buildLayout(
+        target,
+        sourceType,
+        sourceName || "Presentacion",
+        titleOverride.trim(),
+        subtitleOverride.trim(),
+      );
       setResult(data);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Error al transcribir");
+      setError(e instanceof Error ? e.message : "Error al maquetar");
     } finally {
       setLoading(false);
     }
@@ -789,8 +768,8 @@ function TranscriberDashboard({ onBack }: { onBack?: () => void }) {
           {onBack && (
             <button className="btn btn-ghost btn-back" onClick={onBack}>← Inicio</button>
           )}
-          <div className="badge">Transcriptor · v1.0</div>
-          <h1>Transcriptor de Imágenes</h1>
+          <div className="badge">Maquetador · v1.0</div>
+          <h1>Maquetador ADG</h1>
         </div>
         <div className="user-menu">
           <span>{user?.name || user?.email}</span>
@@ -799,113 +778,94 @@ function TranscriberDashboard({ onBack }: { onBack?: () => void }) {
       </header>
 
       <div className="upload-section">
-        <p>Selecciona una presentación desde Google Drive o pega su URL, luego elige las diapositivas a transcribir.</p>
+        <p>
+          Selecciona un PDF o una presentación de Google Slides del cliente. Se generará una maqueta
+          nueva en tu Drive con portada, contraportada y textos extraídos según la identidad ADG.
+        </p>
         <button className="btn btn-primary drive-picker-btn" onClick={handlePickFromDrive} disabled={loading}>
           Seleccionar desde Drive
         </button>
-        {selectedSlidesName && (
-          <p className="selected-file">Archivo seleccionado: <strong>{selectedSlidesName}</strong></p>
+        {sourceName && (
+          <p className="selected-file">
+            Archivo seleccionado: <strong>{sourceName}</strong> ({sourceType === "pdf" ? "PDF" : "Google Slides"})
+          </p>
         )}
         <div className="divider"><span>o</span></div>
         <input
           type="text"
-          placeholder="https://docs.google.com/presentation/d/..."
-          value={slidesUrl}
+          placeholder="https://docs.google.com/presentation/d/... o ID de archivo en Drive"
+          value={sourceUrl}
           onChange={(e) => {
-            setSlidesUrl(e.target.value);
-            setSelectedSlidesName("");
-            setTotalSlides(null);
-            setSelectedSlides(new Set());
+            setSourceUrl(e.target.value);
+            setSourceName("");
+            setSourceType("slides");
+            setResult(null);
           }}
           disabled={loading}
         />
+      </div>
+
+      <div className="transcriber-config">
+        <div className="transcriber-options">
+          <h3>Opciones</h3>
+          <label className="transcriber-toggle-row">
+            <span>Título de portada (opcional)</span>
+            <input
+              type="text"
+              value={titleOverride}
+              onChange={(e) => setTitleOverride(e.target.value)}
+              placeholder="Se detecta automáticamente si se deja vacío"
+              disabled={loading}
+            />
+          </label>
+          <label className="transcriber-toggle-row">
+            <span>Subtítulo de portada (opcional)</span>
+            <input
+              type="text"
+              value={subtitleOverride}
+              onChange={(e) => setSubtitleOverride(e.target.value)}
+              placeholder="Se detecta automáticamente si se deja vacío"
+              disabled={loading}
+            />
+          </label>
+        </div>
+
         <button
-          className="btn btn-secondary"
-          onClick={handleFetchSlideCount}
-          disabled={loading || !slidesUrl.trim()}
+          className="btn btn-primary"
+          onClick={handleBuildLayout}
+          disabled={loading || !sourceUrl.trim()}
         >
-          Cargar diapositivas
+          {loading ? "Maquetando..." : "Maquetar presentación"}
         </button>
       </div>
 
       {error && <div className="error-banner">{error}</div>}
 
-      {totalSlides !== null && (
-        <div className="transcriber-config">
-          <div className="transcriber-slide-picker">
-            <div className="transcriber-slide-picker-header">
-              <h3>Diapositivas a transcribir ({selectedSlides.size} de {totalSlides})</h3>
-              <button className="btn btn-ghost btn-sm" onClick={toggleAll}>
-                {selectedSlides.size === totalSlides ? "Deseleccionar todas" : "Seleccionar todas"}
-              </button>
-            </div>
-            <div className="transcriber-slide-grid">
-              {Array.from({ length: totalSlides }, (_, i) => i + 1).map((n) => (
-                <button
-                  key={n}
-                  className={`transcriber-slide-btn${selectedSlides.has(n) ? " selected" : ""}`}
-                  onClick={() => toggleSlide(n)}
-                >
-                  {n}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="transcriber-options">
-            <h3>Opciones</h3>
-            <div className="transcriber-toggle-row">
-              <span>Generar documento nuevo en Drive</span>
-              <div className="transcriber-toggle-group">
-                <button
-                  className={`transcriber-toggle-btn${!newDocument ? " active" : ""}`}
-                  onClick={() => setNewDocument(false)}
-                >
-                  No
-                </button>
-                <button
-                  className={`transcriber-toggle-btn${newDocument ? " active" : ""}`}
-                  onClick={() => setNewDocument(true)}
-                >
-                  Sí
-                </button>
-              </div>
-            </div>
-            <p className="hint">
-              {newDocument
-                ? "Se creará un nuevo documento en Drive solo con las diapositivas seleccionadas, con el texto extraído."
-                : "Las imágenes se reemplazarán por cuadros de texto en el documento original."}
-            </p>
-          </div>
-
-          <button
-            className="btn btn-primary"
-            onClick={handleTranscribe}
-            disabled={loading || selectedSlides.size === 0}
-          >
-            {loading ? "Transcribiendo..." : `Transcribir ${selectedSlides.size} diapositiva${selectedSlides.size !== 1 ? "s" : ""}`}
-          </button>
-        </div>
-      )}
-
       {result && (
         <div className="transcriber-result">
           <h2>Resultado</h2>
-          {result.slides && result.slides.some((s) => s.texts_extracted.length > 0) ? (
-            <p className="transcriber-result-ok">
-              Transcripción completada: {result.total_texts} texto(s) extraído(s)
-            </p>
-          ) : (
-            <p className="transcriber-result-empty">No se encontraron imágenes con texto suficiente.</p>
+          <p className="transcriber-result-ok">
+            Maqueta generada con {result.slides_processed} diapositiva{result.slides_processed !== 1 ? "s" : ""}.
+          </p>
+          {result.cover_title && (
+            <p>Título de portada: <strong>{result.cover_title}</strong></p>
           )}
-          {result.document_url && (
+          {result.cover_subtitle && (
+            <p>Subtítulo de portada: <strong>{result.cover_subtitle}</strong></p>
+          )}
+          {result.skipped_slides.length > 0 && (
+            <p className="hint">
+              Diapositivas omitidas (sin texto detectado): {result.skipped_slides.join(", ")}
+            </p>
+          )}
+          {result.presentation_url && (
             <a
               className="btn btn-primary"
-              href={result.document_url}
+              href={result.presentation_url}
               target="_blank"
               rel="noreferrer"
             >
-              Abrir documento
+              Abrir maqueta en Google Slides
             </a>
           )}
         </div>
@@ -914,14 +874,14 @@ function TranscriberDashboard({ onBack }: { onBack?: () => void }) {
   );
 }
 
-type AppMode = "home" | "validator" | "transcriber";
+type AppMode = "home" | "maquetador" | "validator";
 
 function Dashboard() {
   const { user, logout } = useAuth();
   const [mode, setMode] = useState<AppMode>("home");
 
+  if (mode === "maquetador") return <MaquetadorDashboard onBack={() => setMode("home")} />;
   if (mode === "validator") return <ValidatorDashboard onBack={() => setMode("home")} />;
-  if (mode === "transcriber") return <TranscriberDashboard onBack={() => setMode("home")} />;
 
   return (
     <div className="app home-page">
@@ -937,6 +897,18 @@ function Dashboard() {
       </header>
       <p className="home-subtitle">Selecciona una herramienta para continuar.</p>
       <div className="home-cards">
+        <button className="home-card" onClick={() => setMode("maquetador")}>
+          <div className="home-card-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="3" y="3" width="18" height="18" rx="2"/>
+              <path d="M3 9h18M9 21V9"/>
+            </svg>
+          </div>
+          <div className="home-card-body">
+            <h2>Maquetador</h2>
+            <p>Genera una maqueta ADG a partir de un PDF o Google Slides del cliente, con textos extraídos y estructura corporativa.</p>
+          </div>
+        </button>
         <button className="home-card" onClick={() => setMode("validator")}>
           <div className="home-card-icon">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -947,18 +919,6 @@ function Dashboard() {
           <div className="home-card-body">
             <h2>Validador</h2>
             <p>Comprueba que una presentación de Google Slides cumple el manual de identidad corporativa ADG.</p>
-          </div>
-        </button>
-        <button className="home-card" onClick={() => setMode("transcriber")}>
-          <div className="home-card-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-              <rect x="3" y="3" width="18" height="18" rx="2"/>
-              <path d="M3 9h18M9 21V9"/>
-            </svg>
-          </div>
-          <div className="home-card-body">
-            <h2>Transcriptor</h2>
-            <p>Extrae el texto de imágenes en diapositivas y lo convierte en cuadros de texto editables.</p>
           </div>
         </button>
       </div>
