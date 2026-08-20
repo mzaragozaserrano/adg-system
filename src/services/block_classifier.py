@@ -65,21 +65,50 @@ def _is_cover_noise(block: OcrBlock, img_width: float, img_height: float) -> boo
     text = block.text.strip().lower()
     if any(token in text for token in _COVER_NOISE_TOKENS):
         return True
-    if block.y1 > img_height * 0.90:
+    if block.y1 > img_height * 0.93 and block.height < img_height * 0.06:
         return True
-    if block.y0 < img_height * 0.08 and block.x0 > img_width * 0.55:
+    if block.y0 < img_height * 0.08 and block.x0 > img_width * 0.55 and block.height < img_height * 0.06:
         return True
     return False
 
 
+def _line_ordered_words(words: list[OcrWord]) -> list[OcrWord]:
+    """Agrupa palabras por línea visual y ordena por x0 dentro de cada línea.
+    Evita el reordenamiento incorrecto causado por variaciones de y0 en la misma línea."""
+    if not words:
+        return []
+
+    words_sorted = sorted(words, key=lambda w: w.y0)
+    lines: list[list[OcrWord]] = []
+
+    for word in words_sorted:
+        word_mid = (word.y0 + word.y1) / 2
+        placed = False
+        for line in lines:
+            line_y0 = min(w.y0 for w in line)
+            line_y1 = max(w.y1 for w in line)
+            if line_y0 <= word_mid <= line_y1:
+                line.append(word)
+                placed = True
+                break
+        if not placed:
+            lines.append([word])
+
+    for line in lines:
+        line.sort(key=lambda w: w.x0)
+
+    lines.sort(key=lambda line: min(w.y0 for w in line))
+
+    return [w for line in lines for w in line]
+
+
 def _join_block_texts(blocks: list[OcrBlock]) -> OcrBlock:
     """Crea un OcrBlock cuyo texto es la unión de los textos de los bloques
-    en orden vertical. No mezcla palabras entre bloques para evitar orden garbajeado."""
+    en orden vertical, con palabras ordenadas por línea dentro de cada bloque."""
     blocks_sorted = sorted(blocks, key=lambda b: b.y0)
     merged = OcrBlock()
     for block in blocks_sorted:
-        words_sorted = sorted(block.words, key=lambda w: (w.y0, w.x0))
-        merged.words.extend(words_sorted)
+        merged.words.extend(_line_ordered_words(block.words))
     return merged
 
 
