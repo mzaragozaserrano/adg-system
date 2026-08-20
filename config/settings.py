@@ -81,7 +81,7 @@ class Settings(BaseSettings):
 
     google_service_account_json: str = ""
 
-    layout_template_slides_id: str = ""
+    layout_template_slides_id: str = "1ZLjZALxgqwby7efHLyhLlDmixHrg7W-CvgkpNaTDZgE"
 
     @property
     def google_scopes_write(self) -> list[str]:

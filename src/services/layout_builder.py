@@ -20,18 +20,22 @@ from src.services.block_classifier import (
     classify_cover_slide,
     infer_cover_title_from_filename,
 )
+from src.services.content_mapper import (
+    build_replace_requests,
+    map_cover_to_slots,
+)
 from src.services.ocr_blocks import OcrBlock, ocr_image_bytes_structured
 from src.services.slide_images import (
     download_drive_pdf,
     pdf_bytes_to_page_images,
     slides_to_page_images,
 )
+from src.services.template_analyzer import analyze_template_slide
+from src.validators.slides_text import collect_slides_text_spans
 
 PT_TO_EMU = 914400 / 72
 SLIDE_W_PT = 720.0
 SLIDE_H_PT = 405.0
-SLIDE_W_EMU = int(SLIDE_W_PT * PT_TO_EMU)
-SLIDE_H_EMU = int(SLIDE_H_PT * PT_TO_EMU)
 
 MARGIN_LEFT_PT = 36.0
 MARGIN_TOP_PT = 20.0
@@ -236,73 +240,6 @@ class LayoutResult:
     cover_subtitle: str = ""
 
 
-def _get_template_slide_ids(
-    slides_service,
-    template_id: str,
-) -> tuple[str | None, str | None]:
-    try:
-        pres = slides_service.presentations().get(presentationId=template_id).execute()
-        slides = pres.get("slides", [])
-        cover_id = slides[0]["objectId"] if len(slides) >= 1 else None
-        backcover_id = slides[-1]["objectId"] if len(slides) >= 2 else None
-        return cover_id, backcover_id
-    except Exception:
-        return None, None
-
-
-def _copy_slide_from_template(
-    slides_service,
-    source_presentation_id: str,
-    source_page_id: str,
-    target_presentation_id: str,
-    insertion_index: int,
-) -> str | None:
-    try:
-        new_id = f"copied_{source_page_id}_{insertion_index}"
-        slides_service.presentations().batchUpdate(
-            presentationId=target_presentation_id,
-            body={
-                "requests": [
-                    {
-                        "duplicateObject": {
-                            "objectId": source_page_id,
-                        }
-                    }
-                ]
-            },
-        ).execute()
-        return new_id
-    except Exception:
-        return None
-
-
-def _fill_cover_placeholder(
-    slides_service,
-    presentation_id: str,
-    page_id: str,
-    title: str,
-    subtitle: str,
-) -> list[dict]:
-    requests: list[dict] = []
-    if title:
-        requests.append({
-            "replaceAllText": {
-                "containsText": {"text": "{{TITULO}}", "matchCase": False},
-                "replaceText": title,
-                "pageObjectIds": [page_id],
-            }
-        })
-    if subtitle:
-        requests.append({
-            "replaceAllText": {
-                "containsText": {"text": "{{SUBTITULO}}", "matchCase": False},
-                "replaceText": subtitle,
-                "pageObjectIds": [page_id],
-            }
-        })
-    return requests
-
-
 def _ocr_page(image_bytes: bytes) -> list[OcrBlock]:
     if not image_bytes:
         return []
@@ -312,70 +249,121 @@ def _ocr_page(image_bytes: bytes) -> list[OcrBlock]:
         return []
 
 
-def build_layout(
-    source_id: str,
-    source_type: str,
+def _detect_cover_text(
+    page_images: list[bytes],
     filename: str,
-    credentials: Credentials,
-    title_override: str = "",
-    subtitle_override: str = "",
-) -> LayoutResult:
-    slides_service = build_slides_client(credentials)
-    drive_service = build_drive_client(credentials)
-
-    if source_type == "pdf":
-        pdf_bytes = download_drive_pdf(source_id, credentials)
-        page_images = pdf_bytes_to_page_images(pdf_bytes)
-    else:
-        page_images = slides_to_page_images(source_id, credentials)
-
-    if not page_images:
-        raise ValueError("No se pudieron obtener imágenes del documento fuente")
-
-    safe_name = filename.rsplit(".", 1)[0] if "." in filename else filename
-    new_pres = slides_service.presentations().create(
-        body={"title": f"{safe_name} — Maqueta ADG"}
-    ).execute()
-    new_id = new_pres["presentationId"]
-    new_slides = new_pres.get("slides", [])
-
-    template_id = settings.layout_template_slides_id
+    title_override: str,
+    subtitle_override: str,
+) -> tuple[str, str, list[ClassifiedBlock]]:
     cover_title = title_override
     cover_subtitle = subtitle_override
-    backcover_page_id: str | None = None
+    classified: list[ClassifiedBlock] = []
 
-    if template_id:
-        template_pres = slides_service.presentations().get(
-            presentationId=template_id
-        ).execute()
-        template_slides = template_pres.get("slides", [])
-
-        if template_slides:
-            cover_template_id = template_slides[0]["objectId"]
-            drive_service.files().copy(
-                fileId=template_id,
-                body={"name": "__tmp_cover_copy__"},
-            )
-
-    first_slide_id = new_slides[0]["objectId"] if new_slides else None
-
-    cover_blocks = _ocr_page(page_images[0])
-
-    if cover_blocks:
-        img_w, img_h = 1024.0, 576.0
-        classified_cover = classify_cover_slide(cover_blocks, img_w, img_h)
-        for cb in classified_cover:
-            text = cb.block.text.strip()
-            if cb.role == BlockRole.COVER_TITLE and not cover_title:
-                cover_title = text
-            elif cb.role == BlockRole.COVER_SUBTITLE and not cover_subtitle:
-                cover_subtitle = text
+    if page_images:
+        cover_blocks = _ocr_page(page_images[0])
+        if cover_blocks:
+            img_w, img_h = 1024.0, 576.0
+            classified = classify_cover_slide(cover_blocks, img_w, img_h)
+            for cb in classified:
+                text = cb.block.text.strip()
+                if cb.role == BlockRole.COVER_TITLE and not cover_title:
+                    cover_title = text
+                elif cb.role == BlockRole.COVER_SUBTITLE and not cover_subtitle:
+                    cover_subtitle = text
 
     if not cover_title:
         cover_title = infer_cover_title_from_filename(filename)
 
-    init_requests: list[dict] = []
+    return cover_title, cover_subtitle, classified
 
+
+def _fill_cover_from_template(
+    slides_service,
+    new_id: str,
+    cover_slide: dict,
+    classified_cover: list[ClassifiedBlock],
+    cover_title: str,
+    cover_subtitle: str,
+) -> None:
+    theme_fonts: dict | None = None
+    slots = analyze_template_slide(cover_slide, theme_fonts)
+
+    if not slots:
+        return
+
+    mapping = map_cover_to_slots(
+        classified_cover,
+        slots,
+        filename_fallback=cover_title,
+    )
+
+    if not mapping:
+        return
+
+    replace_reqs = build_replace_requests(mapping)
+    if replace_reqs:
+        slides_service.presentations().batchUpdate(
+            presentationId=new_id,
+            body={"requests": replace_reqs},
+        ).execute()
+
+
+def _init_from_template(
+    drive_service,
+    slides_service,
+    template_id: str,
+    name: str,
+    cover_title: str,
+    cover_subtitle: str,
+    classified_cover: list[ClassifiedBlock],
+) -> tuple[str, int]:
+    copy = drive_service.files().copy(
+        fileId=template_id,
+        body={"name": name},
+    ).execute()
+    new_id = copy["id"]
+
+    pres = slides_service.presentations().get(presentationId=new_id).execute()
+    slides = pres.get("slides", [])
+
+    if len(slides) > 2:
+        to_delete = [slides[i]["objectId"] for i in range(1, len(slides) - 1)]
+        delete_requests = [
+            {"deleteObject": {"objectId": oid}} for oid in reversed(to_delete)
+        ]
+        slides_service.presentations().batchUpdate(
+            presentationId=new_id,
+            body={"requests": delete_requests},
+        ).execute()
+        pres = slides_service.presentations().get(presentationId=new_id).execute()
+        slides = pres.get("slides", [])
+
+    if slides:
+        _fill_cover_from_template(
+            slides_service,
+            new_id,
+            slides[0],
+            classified_cover,
+            cover_title,
+            cover_subtitle,
+        )
+
+    return new_id, 1
+
+
+def _init_blank_presentation(
+    slides_service,
+    name: str,
+    cover_title: str,
+    cover_subtitle: str,
+) -> tuple[str, int]:
+    new_pres = slides_service.presentations().create(
+        body={"title": name}
+    ).execute()
+    new_id = new_pres["presentationId"]
+    first_slide_id = new_pres.get("slides", [{}])[0].get("objectId")
+
+    init_requests: list[dict] = []
     if first_slide_id:
         if cover_title:
             init_requests.extend(
@@ -414,15 +402,65 @@ def build_layout(
             body={"requests": init_requests},
         ).execute()
 
+    return new_id, 1
+
+
+def build_layout(
+    source_id: str,
+    source_type: str,
+    filename: str,
+    credentials: Credentials,
+    title_override: str = "",
+    subtitle_override: str = "",
+) -> LayoutResult:
+    slides_service = build_slides_client(credentials)
+    drive_service = build_drive_client(credentials)
+
+    if source_type == "pdf":
+        pdf_bytes = download_drive_pdf(source_id, credentials)
+        page_images = pdf_bytes_to_page_images(pdf_bytes)
+    else:
+        page_images = slides_to_page_images(source_id, credentials)
+
+    if not page_images:
+        raise ValueError("No se pudieron obtener imágenes del documento fuente")
+
+    safe_name = filename.rsplit(".", 1)[0] if "." in filename else filename
+    doc_name = f"{safe_name} — Maqueta ADG"
+
+    cover_title, cover_subtitle, classified_cover = _detect_cover_text(
+        page_images, filename, title_override, subtitle_override
+    )
+
+    template_id = settings.layout_template_slides_id
+    if template_id:
+        new_id, content_insert_index = _init_from_template(
+            drive_service,
+            slides_service,
+            template_id,
+            doc_name,
+            cover_title,
+            cover_subtitle,
+            classified_cover,
+        )
+    else:
+        new_id, content_insert_index = _init_blank_presentation(
+            slides_service,
+            doc_name,
+            cover_title,
+            cover_subtitle,
+        )
+
     content_pages = page_images[1:]
     skipped: list[int] = []
 
     for idx, img_bytes in enumerate(content_pages):
         slide_number = idx + 2
+        insertion_index = content_insert_index + idx
 
         add_slide_req = slides_service.presentations().batchUpdate(
             presentationId=new_id,
-            body={"requests": [{"addSlide": {"insertionIndex": idx + 1}}]},
+            body={"requests": [{"addSlide": {"insertionIndex": insertion_index}}]},
         ).execute()
 
         replies = add_slide_req.get("replies", [])
@@ -450,34 +488,6 @@ def build_layout(
                 presentationId=new_id,
                 body={"requests": content_requests},
             ).execute()
-
-    if template_id:
-        template_pres = slides_service.presentations().get(
-            presentationId=template_id
-        ).execute()
-        template_slides = template_pres.get("slides", [])
-        if len(template_slides) >= 2:
-            backcover_src_id = template_slides[-1]["objectId"]
-            current_pres = slides_service.presentations().get(
-                presentationId=new_id
-            ).execute()
-            total_slides = len(current_pres.get("slides", []))
-            try:
-                slides_service.presentations().batchUpdate(
-                    presentationId=new_id,
-                    body={
-                        "requests": [
-                            {
-                                "addSlide": {
-                                    "insertionIndex": total_slides,
-                                    "slideLayoutReference": {"predefinedLayout": "BLANK"},
-                                }
-                            }
-                        ]
-                    },
-                ).execute()
-            except Exception:
-                pass
 
     url = f"https://docs.google.com/presentation/d/{new_id}/edit"
     current_pres = slides_service.presentations().get(presentationId=new_id).execute()

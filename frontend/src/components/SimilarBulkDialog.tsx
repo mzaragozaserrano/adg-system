@@ -15,10 +15,10 @@ export default function SimilarBulkDialog({
   return (
     <div className="modal-overlay" onClick={onCancel}>
       <div className="modal-card" onClick={(event) => event.stopPropagation()} role="dialog" aria-modal="true">
-        <h3>Errores similares en la diapositiva {prompt.anchor.slide}</h3>
+        <h3>Errores idénticos en la diapositiva {prompt.anchor.slide}</h3>
         <p>
-          ¿Quieres {actionLabel} todos los errores de <strong>{prompt.anchor.category}</strong> en esta diapositiva?
-          Hay {total} en total.
+          Hay {total} errores con el mismo problema: <strong>{prompt.anchor.category}</strong>{" "}
+          <em>«{prompt.anchor.actual}»</em>. ¿Quieres {actionLabel} todos?
         </p>
         <div className="modal-actions">
           <button className="btn btn-ghost" onClick={onCancel}>
