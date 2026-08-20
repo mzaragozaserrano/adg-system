@@ -16,6 +16,7 @@ logging.basicConfig(
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    logger.info("Iniciando API ADG (health=%s)", settings.api_url)
     init_db()
     yield
 

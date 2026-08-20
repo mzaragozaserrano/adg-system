@@ -8,8 +8,15 @@ on:
 
 jobs:
   deploy:
-    if: vars.RENDER_AUTO_DEPLOY == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Trigger Render deploy hook
-        run: curl -fsS -X POST "${{ secrets.RENDER_DEPLOY_HOOK_URL }}"
+        env:
+          DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+        run: |
+          if [ -z "$DEPLOY_HOOK_URL" ]; then
+            echo "RENDER_DEPLOY_HOOK_URL no configurado; omitiendo deploy."
+            exit 0
+          fi
+          curl -fsS -X POST "$DEPLOY_HOOK_URL"
+          echo "Deploy de Render solicitado."

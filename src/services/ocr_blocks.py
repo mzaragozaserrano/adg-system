@@ -7,9 +7,7 @@ import tempfile
 from dataclasses import dataclass, field
 
 import httpx
-from google.cloud import vision
 from googleapiclient.http import MediaIoBaseUpload
-import fitz
 
 logger = logging.getLogger(__name__)
 
@@ -66,12 +64,14 @@ class OcrBlock:
         return (self.y0 + self.y1) / 2
 
 
-_vision_client: vision.ImageAnnotatorClient | None = None
+_vision_client = None
 
 
-def _get_vision_client() -> vision.ImageAnnotatorClient:
+def _get_vision_client():
     global _vision_client
     if _vision_client is None:
+        from google.cloud import vision
+
         sa_json = os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON")
         if sa_json and not os.environ.get("GOOGLE_APPLICATION_CREDENTIALS"):
             tmp = tempfile.NamedTemporaryFile(
@@ -93,6 +93,8 @@ def _vertices_to_bbox(vertices: list) -> tuple[float, float, float, float]:
 
 
 def ocr_image_bytes_structured(image_bytes: bytes) -> list[OcrBlock]:
+    from google.cloud import vision
+
     client = _get_vision_client()
     image = vision.Image(content=image_bytes)
     response = client.document_text_detection(image=image)
@@ -174,6 +176,8 @@ def _sample_text_color(
 def enrich_blocks_with_colors(blocks: list[OcrBlock], image_bytes: bytes) -> None:
     if not blocks or not image_bytes:
         return
+
+    import fitz
 
     filetype = "png" if _detect_image_mime(image_bytes) == "image/png" else "jpeg"
     doc = fitz.open(stream=image_bytes, filetype=filetype)
