@@ -8,6 +8,16 @@ from src.services.ocr_blocks import OcrBlock
 
 _SECTION_NUMBER_RE = re.compile(r"^\d{1,2}\.$")
 
+_COVER_NOISE_TOKENS = (
+    "notebooklm",
+    "ad gravity",
+    "adgravity",
+    "adg media",
+    "adg group",
+)
+
+_SUBTITLE_MAX_HEIGHT_RATIO = 0.78
+
 
 class BlockRole(str, Enum):
     COVER_TITLE = "cover_title"
@@ -24,12 +34,6 @@ class ClassifiedBlock:
     block: OcrBlock
     role: BlockRole
     confidence: float
-
-
-def _relative_height(block: OcrBlock, img_height: float) -> float:
-    if img_height <= 0:
-        return 0.0
-    return block.height / img_height
 
 
 def _is_top_zone(block: OcrBlock, img_height: float, ratio: float = 0.30) -> bool:
@@ -57,120 +61,73 @@ def _char_count(block: OcrBlock) -> int:
     return len(block.text.strip())
 
 
-_TITLE_SIZE_RATIO = 0.72
-_SUBTITLE_MAX_SIZE_RATIO = 0.62
-_COLOR_DISTANCE_THRESHOLD = 50.0
-
-
-def _color_distance(
-    c1: tuple[int, int, int] | None,
-    c2: tuple[int, int, int] | None,
-) -> float:
-    if c1 is None or c2 is None:
-        return 0.0
-    return sum((a - b) ** 2 for a, b in zip(c1, c2)) ** 0.5
-
-
-def _colors_similar(
-    c1: tuple[int, int, int] | None,
-    c2: tuple[int, int, int] | None,
-) -> bool:
-    if c1 is None or c2 is None:
-        return True
-    return _color_distance(c1, c2) < _COLOR_DISTANCE_THRESHOLD
-
-
 def _is_cover_noise(block: OcrBlock, img_width: float, img_height: float) -> bool:
     text = block.text.strip().lower()
-    if any(token in text for token in ("notebooklm", "ad gravity", "adgravity", "adg media")):
+    if any(token in text for token in _COVER_NOISE_TOKENS):
         return True
-    if block.y1 > img_height * 0.88:
+    if block.y1 > img_height * 0.90:
         return True
     if block.y0 < img_height * 0.08 and block.x0 > img_width * 0.55:
-        return True
-    if block.height < img_height * 0.035 and len(text) < 20:
         return True
     return False
 
 
-def _merge_blocks(blocks: list[OcrBlock]) -> OcrBlock:
+def _join_block_texts(blocks: list[OcrBlock]) -> OcrBlock:
+    """Crea un OcrBlock cuyo texto es la unión de los textos de los bloques
+    en orden vertical. No mezcla palabras entre bloques para evitar orden garbajeado."""
+    blocks_sorted = sorted(blocks, key=lambda b: b.y0)
     merged = OcrBlock()
-    for block in blocks:
-        merged.words.extend(block.words)
-    merged.words.sort(key=lambda w: (w.y0, w.x0))
-    colors = [b.color for b in blocks if b.color]
-    if colors:
-        merged.color = (
-            sum(c[0] for c in colors) // len(colors),
-            sum(c[1] for c in colors) // len(colors),
-            sum(c[2] for c in colors) // len(colors),
-        )
+    for block in blocks_sorted:
+        words_sorted = sorted(block.words, key=lambda w: (w.y0, w.x0))
+        merged.words.extend(words_sorted)
     return merged
 
 
-def _group_title_lines(
-    sorted_blocks: list[OcrBlock],
-    max_h: float,
-) -> tuple[list[OcrBlock], tuple[int, int, int] | None]:
-    title_lines: list[OcrBlock] = []
-    title_color: tuple[int, int, int] | None = None
+def _group_title_blocks(sorted_blocks: list[OcrBlock]) -> list[OcrBlock]:
+    """Bloque(s) de título: el primero que sea suficientemente grande y los
+    bloques consecutivos de tamaño similar (>= 80% del primero)."""
+    if not sorted_blocks:
+        return []
 
+    title_blocks: list[OcrBlock] = []
     for block in sorted_blocks:
-        rel_h = block.height / max(max_h, 1)
-        if rel_h < _TITLE_SIZE_RATIO:
-            break
-
-        if not title_lines:
-            title_lines.append(block)
-            title_color = block.color
+        if not title_blocks:
+            max_h = max(b.height for b in sorted_blocks)
+            if block.height >= max_h * 0.55:
+                title_blocks.append(block)
             continue
 
-        prev = title_lines[-1]
+        prev = title_blocks[-1]
         gap = block.y0 - prev.y1
-        same_band = rel_h >= _TITLE_SIZE_RATIO
-        same_color = _colors_similar(block.color, title_color)
-        close = gap < prev.height * 2.0
-        if same_band and same_color and close:
-            title_lines.append(block)
+        similar_size = block.height >= title_blocks[0].height * 0.80
+        close_vertically = gap < prev.height * 2.5
+
+        if similar_size and close_vertically:
+            title_blocks.append(block)
         else:
             break
 
-    return title_lines, title_color
+    return title_blocks
 
 
 def _find_subtitle_block(
     sorted_blocks: list[OcrBlock],
-    title_lines: list[OcrBlock],
-    max_h: float,
-    title_color: tuple[int, int, int] | None,
+    title_blocks: list[OcrBlock],
 ) -> OcrBlock | None:
-    if not title_lines:
+    """Primer bloque debajo del título que sea claramente más pequeño."""
+    if not title_blocks:
         return None
 
-    title_bottom = max(b.y1 for b in title_lines)
-    title_h = max(b.height for b in title_lines)
-    title_ids = {id(b) for b in title_lines}
+    title_bottom = max(b.y1 for b in title_blocks)
+    min_title_h = min(b.height for b in title_blocks)
+    title_ids = {id(b) for b in title_blocks}
 
     for block in sorted_blocks:
         if id(block) in title_ids:
             continue
-        if block.y0 < title_bottom - block.height * 0.3:
+        if block.y0 < title_bottom - block.height * 0.5:
             continue
-
-        rel_to_title = block.height / max(title_h, 1)
-        clearly_smaller = rel_to_title <= 0.85
-
-        if title_color is None and block.color is None:
-            if clearly_smaller:
-                return block
-            continue
-
-        rel_h = block.height / max(max_h, 1)
-        smaller = block.height < title_h * _SUBTITLE_MAX_SIZE_RATIO
-        different_color = not _colors_similar(block.color, title_color)
-        subtitle_band = rel_h < _TITLE_SIZE_RATIO
-
-        if subtitle_band and (smaller or different_color):
+        if block.height < min_title_h * _SUBTITLE_MAX_HEIGHT_RATIO:
             return block
 
     return None
@@ -192,14 +149,13 @@ def classify_cover_slide(
         main_blocks = [b for b in blocks if b.text.strip()]
 
     sorted_blocks = sorted(main_blocks, key=lambda b: b.y0)
-    max_h = max(b.height for b in sorted_blocks)
 
-    title_lines, title_color = _group_title_lines(sorted_blocks, max_h)
-    subtitle_block = _find_subtitle_block(sorted_blocks, title_lines, max_h, title_color)
+    title_blocks = _group_title_blocks(sorted_blocks)
+    subtitle_block = _find_subtitle_block(sorted_blocks, title_blocks)
 
     result: list[ClassifiedBlock] = []
-    if title_lines:
-        merged = _merge_blocks(title_lines)
+    if title_blocks:
+        merged = _join_block_texts(title_blocks)
         result.append(ClassifiedBlock(
             block=merged,
             role=BlockRole.COVER_TITLE,
@@ -213,7 +169,7 @@ def classify_cover_slide(
             confidence=0.85,
         ))
 
-    assigned_ids = {id(b) for b in title_lines}
+    assigned_ids = {id(b) for b in title_blocks}
     if subtitle_block:
         assigned_ids.add(id(subtitle_block))
 
