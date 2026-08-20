@@ -1,6 +1,6 @@
 import secrets
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 
@@ -9,25 +9,62 @@ from src.api.deps import get_current_user, get_google_credentials
 from src.api.schemas import UserResponse
 from src.auth.google_oauth import (
     build_google_auth_url,
+    dump_oauth_session,
     exchange_google_code,
     frontend_callback_url,
+    load_oauth_session,
     persist_google_token,
 )
-from src.auth.security import create_access_token, credentials_from_encrypted, decrypt_token
+from src.auth.security import create_access_token, decrypt_token
 from src.db.models import User, get_db
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+
+_OAUTH_STATE_COOKIE = "adg_oauth_state"
+
+
+def _cookie_kwargs() -> dict:
+    return {
+        "httponly": True,
+        "samesite": "lax",
+        "secure": settings.google_redirect_uri.startswith("https://"),
+        "max_age": 600,
+        "path": "/",
+    }
+
+
+def _oauth_redirect(url: str, state: str, code_verifier: str) -> RedirectResponse:
+    response = RedirectResponse(url)
+    response.set_cookie(
+        _OAUTH_STATE_COOKIE,
+        dump_oauth_session(state, code_verifier),
+        **_cookie_kwargs(),
+    )
+    return response
 
 
 @router.get("/google")
 def google_login(consent: bool = False):
     state = secrets.token_urlsafe(32)
-    return RedirectResponse(build_google_auth_url(state, force_consent=consent))
+    url, verifier = build_google_auth_url(state, force_consent=consent)
+    return _oauth_redirect(url, state, verifier)
 
 
 @router.get("/google/callback")
-def google_callback(code: str, state: str, db: Session = Depends(get_db)):
-    user_info, token_data = exchange_google_code(code, state)
+def google_callback(
+    request: Request,
+    code: str,
+    state: str,
+    db: Session = Depends(get_db),
+):
+    raw_cookie = request.cookies.get(_OAUTH_STATE_COOKIE)
+    if not raw_cookie:
+        raise HTTPException(status_code=400, detail="Sesión OAuth inválida. Vuelve a iniciar sesión.")
+    session = load_oauth_session(raw_cookie)
+    if session.get("state") != state:
+        raise HTTPException(status_code=400, detail="Sesión OAuth inválida. Vuelve a iniciar sesión.")
+
+    user_info, token_data = exchange_google_code(code, session.get("verifier") or "")
     email = user_info["email"]
     user = db.query(User).filter(User.email == email).first()
     existing_encrypted = user.google_token_encrypted if user else None
@@ -50,14 +87,22 @@ def google_callback(code: str, state: str, db: Session = Depends(get_db)):
         merged_data = {}
 
     if not merged_data.get("refresh_token"):
-        return RedirectResponse(build_google_auth_url(secrets.token_urlsafe(32), force_consent=True))
+        retry_state = secrets.token_urlsafe(32)
+        url, verifier = build_google_auth_url(
+            retry_state,
+            force_consent=True,
+            login_hint=email,
+        )
+        return _oauth_redirect(url, retry_state, verifier)
 
     user.google_token_encrypted = merged_encrypted
     db.commit()
     db.refresh(user)
 
     token = create_access_token(user.id, user.email)
-    return RedirectResponse(frontend_callback_url(token))
+    response = RedirectResponse(frontend_callback_url(token))
+    response.delete_cookie(_OAUTH_STATE_COOKIE, path="/")
+    return response
 
 
 @router.get("/me", response_model=UserResponse)
