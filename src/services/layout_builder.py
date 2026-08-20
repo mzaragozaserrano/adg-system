@@ -20,18 +20,22 @@ from src.services.block_classifier import (
     classify_cover_slide,
     infer_cover_title_from_filename,
 )
+from src.services.content_mapper import (
+    build_replace_requests,
+    map_cover_to_slots,
+)
 from src.services.ocr_blocks import OcrBlock, ocr_image_bytes_structured
 from src.services.slide_images import (
     download_drive_pdf,
     pdf_bytes_to_page_images,
     slides_to_page_images,
 )
+from src.services.template_analyzer import analyze_template_slide
+from src.validators.slides_text import collect_slides_text_spans
 
 PT_TO_EMU = 914400 / 72
 SLIDE_W_PT = 720.0
 SLIDE_H_PT = 405.0
-SLIDE_W_EMU = int(SLIDE_W_PT * PT_TO_EMU)
-SLIDE_H_EMU = int(SLIDE_H_PT * PT_TO_EMU)
 
 MARGIN_LEFT_PT = 36.0
 MARGIN_TOP_PT = 20.0
@@ -236,29 +240,13 @@ class LayoutResult:
     cover_subtitle: str = ""
 
 
-def _fill_cover_placeholder(
-    page_id: str,
-    title: str,
-    subtitle: str,
-) -> list[dict]:
-    requests: list[dict] = []
-    if title:
-        requests.append({
-            "replaceAllText": {
-                "containsText": {"text": "{{TITULO}}", "matchCase": False},
-                "replaceText": title,
-                "pageObjectIds": [page_id],
-            }
-        })
-    if subtitle:
-        requests.append({
-            "replaceAllText": {
-                "containsText": {"text": "{{SUBTITULO}}", "matchCase": False},
-                "replaceText": subtitle,
-                "pageObjectIds": [page_id],
-            }
-        })
-    return requests
+def _ocr_page(image_bytes: bytes) -> list[OcrBlock]:
+    if not image_bytes:
+        return []
+    try:
+        return ocr_image_bytes_structured(image_bytes)
+    except Exception:
+        return []
 
 
 def _detect_cover_text(
@@ -266,16 +254,17 @@ def _detect_cover_text(
     filename: str,
     title_override: str,
     subtitle_override: str,
-) -> tuple[str, str]:
+) -> tuple[str, str, list[ClassifiedBlock]]:
     cover_title = title_override
     cover_subtitle = subtitle_override
+    classified: list[ClassifiedBlock] = []
 
     if page_images:
         cover_blocks = _ocr_page(page_images[0])
         if cover_blocks:
             img_w, img_h = 1024.0, 576.0
-            classified_cover = classify_cover_slide(cover_blocks, img_w, img_h)
-            for cb in classified_cover:
+            classified = classify_cover_slide(cover_blocks, img_w, img_h)
+            for cb in classified:
                 text = cb.block.text.strip()
                 if cb.role == BlockRole.COVER_TITLE and not cover_title:
                     cover_title = text
@@ -285,7 +274,38 @@ def _detect_cover_text(
     if not cover_title:
         cover_title = infer_cover_title_from_filename(filename)
 
-    return cover_title, cover_subtitle
+    return cover_title, cover_subtitle, classified
+
+
+def _fill_cover_from_template(
+    slides_service,
+    new_id: str,
+    cover_slide: dict,
+    classified_cover: list[ClassifiedBlock],
+    cover_title: str,
+    cover_subtitle: str,
+) -> None:
+    theme_fonts: dict | None = None
+    slots = analyze_template_slide(cover_slide, theme_fonts)
+
+    if not slots:
+        return
+
+    mapping = map_cover_to_slots(
+        classified_cover,
+        slots,
+        filename_fallback=cover_title,
+    )
+
+    if not mapping:
+        return
+
+    replace_reqs = build_replace_requests(mapping)
+    if replace_reqs:
+        slides_service.presentations().batchUpdate(
+            presentationId=new_id,
+            body={"requests": replace_reqs},
+        ).execute()
 
 
 def _init_from_template(
@@ -295,6 +315,7 @@ def _init_from_template(
     name: str,
     cover_title: str,
     cover_subtitle: str,
+    classified_cover: list[ClassifiedBlock],
 ) -> tuple[str, int]:
     copy = drive_service.files().copy(
         fileId=template_id,
@@ -318,14 +339,14 @@ def _init_from_template(
         slides = pres.get("slides", [])
 
     if slides:
-        cover_requests = _fill_cover_placeholder(
-            slides[0]["objectId"], cover_title, cover_subtitle
+        _fill_cover_from_template(
+            slides_service,
+            new_id,
+            slides[0],
+            classified_cover,
+            cover_title,
+            cover_subtitle,
         )
-        if cover_requests:
-            slides_service.presentations().batchUpdate(
-                presentationId=new_id,
-                body={"requests": cover_requests},
-            ).execute()
 
     return new_id, 1
 
@@ -384,15 +405,6 @@ def _init_blank_presentation(
     return new_id, 1
 
 
-def _ocr_page(image_bytes: bytes) -> list[OcrBlock]:
-    if not image_bytes:
-        return []
-    try:
-        return ocr_image_bytes_structured(image_bytes)
-    except Exception:
-        return []
-
-
 def build_layout(
     source_id: str,
     source_type: str,
@@ -416,7 +428,7 @@ def build_layout(
     safe_name = filename.rsplit(".", 1)[0] if "." in filename else filename
     doc_name = f"{safe_name} — Maqueta ADG"
 
-    cover_title, cover_subtitle = _detect_cover_text(
+    cover_title, cover_subtitle, classified_cover = _detect_cover_text(
         page_images, filename, title_override, subtitle_override
     )
 
@@ -429,6 +441,7 @@ def build_layout(
             doc_name,
             cover_title,
             cover_subtitle,
+            classified_cover,
         )
     else:
         new_id, content_insert_index = _init_blank_presentation(
