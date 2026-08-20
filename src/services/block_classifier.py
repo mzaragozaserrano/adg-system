@@ -110,27 +110,41 @@ def _group_title_blocks(sorted_blocks: list[OcrBlock]) -> list[OcrBlock]:
     return title_blocks
 
 
-def _find_subtitle_block(
+def _find_and_group_subtitle_blocks(
     sorted_blocks: list[OcrBlock],
     title_blocks: list[OcrBlock],
-) -> OcrBlock | None:
-    """Primer bloque debajo del título que sea claramente más pequeño."""
+) -> list[OcrBlock]:
+    """Primer bloque debajo del título claramente más pequeño, más los
+    bloques consecutivos de tamaño similar que formen parte del mismo subtítulo."""
     if not title_blocks:
-        return None
+        return []
 
     title_bottom = max(b.y1 for b in title_blocks)
     min_title_h = min(b.height for b in title_blocks)
     title_ids = {id(b) for b in title_blocks}
 
+    subtitle_blocks: list[OcrBlock] = []
     for block in sorted_blocks:
         if id(block) in title_ids:
             continue
         if block.y0 < title_bottom - block.height * 0.5:
             continue
-        if block.height < min_title_h * _SUBTITLE_MAX_HEIGHT_RATIO:
-            return block
 
-    return None
+        if not subtitle_blocks:
+            if block.height < min_title_h * _SUBTITLE_MAX_HEIGHT_RATIO:
+                subtitle_blocks.append(block)
+            continue
+
+        prev = subtitle_blocks[-1]
+        gap = block.y0 - prev.y1
+        similar_size = block.height >= subtitle_blocks[0].height * 0.75
+        close = gap < prev.height * 2.5
+        if similar_size and close:
+            subtitle_blocks.append(block)
+        else:
+            break
+
+    return subtitle_blocks
 
 
 def classify_cover_slide(
@@ -151,7 +165,7 @@ def classify_cover_slide(
     sorted_blocks = sorted(main_blocks, key=lambda b: b.y0)
 
     title_blocks = _group_title_blocks(sorted_blocks)
-    subtitle_block = _find_subtitle_block(sorted_blocks, title_blocks)
+    subtitle_blocks = _find_and_group_subtitle_blocks(sorted_blocks, title_blocks)
 
     result: list[ClassifiedBlock] = []
     if title_blocks:
@@ -162,16 +176,17 @@ def classify_cover_slide(
             confidence=0.9,
         ))
 
-    if subtitle_block:
+    if subtitle_blocks:
+        merged_sub = _join_block_texts(subtitle_blocks)
         result.append(ClassifiedBlock(
-            block=subtitle_block,
+            block=merged_sub,
             role=BlockRole.COVER_SUBTITLE,
             confidence=0.85,
         ))
 
     assigned_ids = {id(b) for b in title_blocks}
-    if subtitle_block:
-        assigned_ids.add(id(subtitle_block))
+    for sb in subtitle_blocks:
+        assigned_ids.add(id(sb))
 
     for block in sorted_blocks:
         if id(block) not in assigned_ids:
