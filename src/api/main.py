@@ -1,8 +1,9 @@
 import logging
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from config.settings import settings
 from src.api.routers import auth, layout, presentations, transcriber
@@ -39,12 +40,25 @@ app.include_router(transcriber.router)
 app.include_router(layout.router)
 
 
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception):
+    if isinstance(exc, HTTPException):
+        return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
+    logger.exception("Error no controlado en %s %s", request.method, request.url.path)
+    return JSONResponse(
+        status_code=500,
+        content={
+            "detail": f"{type(exc).__name__}: {exc}",
+        },
+    )
+
+
 @app.get("/health")
 def health():
     return {
         "status": "ok",
         "service": "adg-system",
-        "version": "2026-08-20-v4",
+        "version": "2026-08-20-v5",
         "allowed_email_domains": settings.resolved_allowed_email_domains,
         "allowed_emails": settings.resolved_allowed_emails,
     }
