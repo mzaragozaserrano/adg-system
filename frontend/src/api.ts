@@ -116,6 +116,27 @@ export async function fetchThumbnail(presentationId: string, slideNumber: number
   return URL.createObjectURL(blob);
 }
 
+export async function buildLayout(
+  urlOrId: string,
+  sourceType: "slides" | "pdf",
+  filename: string,
+  titleOverride = "",
+  subtitleOverride = "",
+) {
+  const response = await apiFetch("/layout/build", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      url_or_id: urlOrId,
+      source_type: sourceType,
+      filename,
+      title_override: titleOverride,
+      subtitle_override: subtitleOverride,
+    }),
+  });
+  return response.json();
+}
+
 export async function transcribeSlides(
   urlOrId: string,
   slideNumbers: number[],
