@@ -43,7 +43,7 @@ def health():
     return {
         "status": "ok",
         "service": "adg-system",
-        "version": "2026-08-20-v2",
+        "version": "2026-08-20-v3",
         "allowed_email_domains": settings.resolved_allowed_email_domains,
         "allowed_emails": settings.resolved_allowed_emails,
     }

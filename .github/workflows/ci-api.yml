@@ -1,0 +1,26 @@
+name: CI API
+
+on:
+  push:
+    branches: [develop, main]
+  pull_request:
+    branches: [develop, main]
+
+jobs:
+  test-api:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install API dependencies
+        run: pip install -r requirements-api.txt pytest
+
+      - name: Run tests
+        run: pytest tests/ -q --ignore=tests/test_api.py
+
+      - name: Verify app starts
+        run: python -c "from src.api.main import app; print(app.title)"
