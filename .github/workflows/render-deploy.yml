@@ -15,7 +15,7 @@ jobs:
           DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
         run: |
           if [ -z "$DEPLOY_HOOK_URL" ]; then
-            echo "RENDER_DEPLOY_HOOK_URL no configurado; omitiendo deploy."
+            echo "::warning::RENDER_DEPLOY_HOOK_URL no configurado. Configura el secret en GitHub o redeploy manual en Render."
             exit 0
           fi
           curl -fsS -X POST "$DEPLOY_HOOK_URL"
