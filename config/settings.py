@@ -71,6 +71,8 @@ class Settings(BaseSettings):
 
     google_service_account_json: str = ""
 
+    layout_template_slides_id: str = ""
+
     @property
     def google_scopes_write(self) -> list[str]:
         return GOOGLE_SCOPES_WRITE
