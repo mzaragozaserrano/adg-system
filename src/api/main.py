@@ -12,6 +12,7 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s %(levelname)s %(name)s: %(message)s",
 )
+logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
@@ -43,7 +44,7 @@ def health():
     return {
         "status": "ok",
         "service": "adg-system",
-        "version": "2026-08-20-v3",
+        "version": "2026-08-20-v4",
         "allowed_email_domains": settings.resolved_allowed_email_domains,
         "allowed_emails": settings.resolved_allowed_emails,
     }
