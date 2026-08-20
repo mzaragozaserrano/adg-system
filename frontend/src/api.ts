@@ -16,10 +16,23 @@ async function apiFetch(path: string, options: RequestInit = {}) {
   const headers = new Headers(options.headers || {});
   const token = getToken();
   if (token) headers.set("Authorization", `Bearer ${token}`);
-  const response = await fetch(`${API_BASE}${path}`, { ...options, headers });
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE}${path}`, { ...options, headers });
+  } catch (err) {
+    const reason = err instanceof Error ? err.message : String(err);
+    throw new Error(`Failed to fetch (${API_BASE}${path}): ${reason}`);
+  }
   if (!response.ok) {
-    const detail = await response.json().catch(() => ({ detail: response.statusText }));
-    throw new Error(detail.detail || "Error de API");
+    const body = await response.json().catch(() => ({ detail: response.statusText }));
+    const detail = body?.detail;
+    const message =
+      typeof detail === "string"
+        ? detail
+        : Array.isArray(detail)
+          ? detail.map((item: { msg?: string }) => item.msg || JSON.stringify(item)).join("; ")
+          : JSON.stringify(body);
+    throw new Error(message || `Error de API (${response.status})`);
   }
   return response;
 }
