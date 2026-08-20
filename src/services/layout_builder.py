@@ -29,6 +29,7 @@ from src.services.slide_images import (
     download_drive_pdf,
     pdf_bytes_to_page_images,
     slides_to_page_images,
+    upload_pdf_bytes,
 )
 from src.services.template_analyzer import analyze_template_slide
 from src.validators.slides_text import collect_slides_text_spans
@@ -308,6 +309,63 @@ def _fill_cover_from_template(
         ).execute()
 
 
+def _get_blank_layout_id(presentation: dict) -> str | None:
+    for layout in presentation.get("layouts", []):
+        name = (layout.get("layoutProperties") or {}).get("name", "").upper()
+        display = (layout.get("layoutProperties") or {}).get("displayName", "").upper()
+        if "BLANK" in name or "BLANK" in display or name == "" or display == "":
+            return layout.get("objectId")
+    layouts = presentation.get("layouts", [])
+    if layouts:
+        return layouts[-1].get("objectId")
+    return None
+
+
+def _add_blank_slide(
+    slides_service,
+    presentation_id: str,
+    insertion_index: int,
+    layout_id: str | None,
+) -> str | None:
+    if layout_id:
+        request = {
+            "addSlide": {
+                "insertionIndex": insertion_index,
+                "slideLayoutReference": {"layoutId": layout_id},
+            }
+        }
+    else:
+        request = {
+            "addSlide": {
+                "insertionIndex": insertion_index,
+                "slideLayoutReference": {"predefinedLayout": "BLANK"},
+            }
+        }
+    try:
+        resp = slides_service.presentations().batchUpdate(
+            presentationId=presentation_id,
+            body={"requests": [request]},
+        ).execute()
+        for reply in resp.get("replies", []):
+            if "addSlide" in reply:
+                return reply["addSlide"].get("objectId")
+    except Exception:
+        pass
+
+    try:
+        resp = slides_service.presentations().batchUpdate(
+            presentationId=presentation_id,
+            body={"requests": [{"addSlide": {"insertionIndex": insertion_index}}]},
+        ).execute()
+        for reply in resp.get("replies", []):
+            if "addSlide" in reply:
+                return reply["addSlide"].get("objectId")
+    except Exception:
+        pass
+
+    return None
+
+
 def _init_from_template(
     drive_service,
     slides_service,
@@ -316,7 +374,7 @@ def _init_from_template(
     cover_title: str,
     cover_subtitle: str,
     classified_cover: list[ClassifiedBlock],
-) -> tuple[str, int]:
+) -> tuple[str, int, str | None]:
     copy = drive_service.files().copy(
         fileId=template_id,
         body={"name": name},
@@ -325,6 +383,7 @@ def _init_from_template(
 
     pres = slides_service.presentations().get(presentationId=new_id).execute()
     slides = pres.get("slides", [])
+    layout_id = _get_blank_layout_id(pres)
 
     if len(slides) > 2:
         to_delete = [slides[i]["objectId"] for i in range(1, len(slides) - 1)]
@@ -348,7 +407,7 @@ def _init_from_template(
             cover_subtitle,
         )
 
-    return new_id, 1
+    return new_id, 1, layout_id
 
 
 def _init_blank_presentation(
@@ -356,7 +415,7 @@ def _init_blank_presentation(
     name: str,
     cover_title: str,
     cover_subtitle: str,
-) -> tuple[str, int]:
+) -> tuple[str, int, None]:
     new_pres = slides_service.presentations().create(
         body={"title": name}
     ).execute()
@@ -402,7 +461,7 @@ def _init_blank_presentation(
             body={"requests": init_requests},
         ).execute()
 
-    return new_id, 1
+    return new_id, 1, None
 
 
 def build_layout(
@@ -412,11 +471,14 @@ def build_layout(
     credentials: Credentials,
     title_override: str = "",
     subtitle_override: str = "",
+    pdf_bytes_direct: bytes | None = None,
 ) -> LayoutResult:
     slides_service = build_slides_client(credentials)
     drive_service = build_drive_client(credentials)
 
-    if source_type == "pdf":
+    if pdf_bytes_direct is not None:
+        page_images = pdf_bytes_to_page_images(pdf_bytes_direct)
+    elif source_type == "pdf":
         pdf_bytes = download_drive_pdf(source_id, credentials)
         page_images = pdf_bytes_to_page_images(pdf_bytes)
     else:
@@ -434,7 +496,7 @@ def build_layout(
 
     template_id = settings.layout_template_slides_id
     if template_id:
-        new_id, content_insert_index = _init_from_template(
+        new_id, content_insert_index, layout_id = _init_from_template(
             drive_service,
             slides_service,
             template_id,
@@ -444,7 +506,7 @@ def build_layout(
             classified_cover,
         )
     else:
-        new_id, content_insert_index = _init_blank_presentation(
+        new_id, content_insert_index, layout_id = _init_blank_presentation(
             slides_service,
             doc_name,
             cover_title,
@@ -458,17 +520,7 @@ def build_layout(
         slide_number = idx + 2
         insertion_index = content_insert_index + idx
 
-        add_slide_req = slides_service.presentations().batchUpdate(
-            presentationId=new_id,
-            body={"requests": [{"addSlide": {"insertionIndex": insertion_index}}]},
-        ).execute()
-
-        replies = add_slide_req.get("replies", [])
-        page_id = None
-        for reply in replies:
-            if "addSlide" in reply:
-                page_id = reply["addSlide"].get("objectId")
-                break
+        page_id = _add_blank_slide(slides_service, new_id, insertion_index, layout_id)
 
         if not page_id:
             skipped.append(slide_number)

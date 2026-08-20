@@ -6,7 +6,7 @@ from pathlib import Path
 import fitz
 import httpx
 from google.oauth2.credentials import Credentials
-from googleapiclient.http import MediaIoBaseDownload
+from googleapiclient.http import MediaFileUpload, MediaIoBaseDownload, MediaIoBaseUpload
 
 from src.integrations.google.clients import build_drive_client, build_slides_client
 
@@ -90,3 +90,20 @@ def download_drive_pdf(file_id: str, credentials: Credentials) -> bytes:
     while not done:
         _, done = downloader.next_chunk()
     return buf.getvalue()
+
+
+def upload_local_pdf(pdf_path: Path, credentials: Credentials) -> str:
+    drive = build_drive_client(credentials)
+    media = MediaFileUpload(str(pdf_path), mimetype="application/pdf", resumable=False)
+    file_meta = {"name": pdf_path.name}
+    uploaded = drive.files().create(body=file_meta, media_body=media, fields="id").execute()
+    return uploaded["id"]
+
+
+def upload_pdf_bytes(pdf_bytes: bytes, filename: str, credentials: Credentials) -> str:
+    drive = build_drive_client(credentials)
+    buf = io.BytesIO(pdf_bytes)
+    media = MediaIoBaseUpload(buf, mimetype="application/pdf", resumable=False)
+    file_meta = {"name": filename}
+    uploaded = drive.files().create(body=file_meta, media_body=media, fields="id").execute()
+    return uploaded["id"]
