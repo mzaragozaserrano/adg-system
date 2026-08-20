@@ -28,10 +28,11 @@ from src.services.content_mapper import (
     build_replace_requests,
     map_cover_to_slots,
 )
-from src.services.ocr_blocks import OcrBlock, ocr_image_bytes_structured
+from src.services.ocr_blocks import OcrBlock, ocr_image_bytes_drive, ocr_image_bytes_structured
 from src.services.slide_images import (
     download_drive_pdf,
     pdf_bytes_to_page_images,
+    pdf_bytes_to_page_jpegs,
     slides_to_page_images,
     upload_pdf_bytes,
 )
@@ -261,17 +262,27 @@ class LayoutResult:
     cover_subtitle: str = ""
 
 
-def _ocr_page(image_bytes: bytes) -> list[OcrBlock]:
+def _ocr_page(image_bytes: bytes, drive_service=None) -> list[OcrBlock]:
     if not image_bytes:
         logger.warning("_ocr_page: imagen vacía, se omite OCR")
         return []
+
     try:
         blocks = ocr_image_bytes_structured(image_bytes)
-        logger.info("_ocr_page: %d bloques detectados (%d bytes)", len(blocks), len(image_bytes))
+        logger.info("_ocr_page: Vision API — %d bloques (%d bytes)", len(blocks), len(image_bytes))
         return blocks
     except Exception as exc:
-        logger.error("_ocr_page: error en Vision API: %s", exc)
-        return []
+        logger.warning("_ocr_page: Vision API falló (%s), probando Drive OCR", exc)
+
+    if drive_service is not None:
+        try:
+            blocks = ocr_image_bytes_drive(image_bytes, drive_service)
+            logger.info("_ocr_page: Drive OCR — %d bloques", len(blocks))
+            return blocks
+        except Exception as exc:
+            logger.error("_ocr_page: Drive OCR también falló: %s", exc)
+
+    return []
 
 
 def _detect_cover_text(
@@ -279,13 +290,14 @@ def _detect_cover_text(
     filename: str,
     title_override: str,
     subtitle_override: str,
+    drive_service=None,
 ) -> tuple[str, str, list[ClassifiedBlock]]:
     cover_title = title_override
     cover_subtitle = subtitle_override
     classified: list[ClassifiedBlock] = []
 
     if page_images:
-        cover_blocks = _ocr_page(page_images[0])
+        cover_blocks = _ocr_page(page_images[0], drive_service=drive_service)
         if cover_blocks:
             img_w, img_h = 1024.0, 576.0
             classified = classify_cover_slide(cover_blocks, img_w, img_h)
@@ -506,12 +518,17 @@ def build_layout(
     slides_service = build_slides_client(credentials)
     drive_service = build_drive_client(credentials)
 
+    is_pdf = pdf_bytes_direct is not None or source_type == "pdf"
+
     if pdf_bytes_direct is not None:
-        page_images = pdf_bytes_to_page_images(pdf_bytes_direct)
+        pdf_bytes_for_ocr: bytes | None = pdf_bytes_direct
+        page_images = pdf_bytes_to_page_jpegs(pdf_bytes_direct)
     elif source_type == "pdf":
-        pdf_bytes = download_drive_pdf(source_id, credentials)
-        page_images = pdf_bytes_to_page_images(pdf_bytes)
+        pdf_bytes_raw = download_drive_pdf(source_id, credentials)
+        pdf_bytes_for_ocr = pdf_bytes_raw
+        page_images = pdf_bytes_to_page_jpegs(pdf_bytes_raw)
     else:
+        pdf_bytes_for_ocr = None
         page_images = slides_to_page_images(source_id, credentials)
 
     if not page_images:
@@ -521,7 +538,8 @@ def build_layout(
     doc_name = f"{safe_name} — Maqueta ADG"
 
     cover_title, cover_subtitle, classified_cover = _detect_cover_text(
-        page_images, filename, title_override, subtitle_override
+        page_images, filename, title_override, subtitle_override,
+        drive_service=drive_service,
     )
 
     template_id = settings.layout_template_slides_id
@@ -564,7 +582,7 @@ def build_layout(
 
         logger.info("Slide %d: creada con page_id=%s", slide_number, page_id)
 
-        blocks = _ocr_page(img_bytes)
+        blocks = _ocr_page(img_bytes, drive_service=drive_service)
 
         img_w, img_h = 1024.0, 576.0
         classified = classify_content_slide(blocks, img_w, img_h) if blocks else []

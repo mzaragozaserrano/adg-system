@@ -81,6 +81,29 @@ def pdf_bytes_to_page_images(pdf_bytes: bytes, dpi: int = 150) -> list[bytes]:
     return images
 
 
+def pdf_bytes_to_page_jpegs(pdf_bytes: bytes, dpi: int = 150) -> list[bytes]:
+    """Extrae imágenes de cada página del PDF.
+
+    Si la página contiene una imagen embebida (caso habitual en PDFs exportados
+    desde presentaciones), la devuelve tal cual para mejor calidad.
+    En caso contrario renderiza la página a JPEG al DPI indicado.
+    """
+    doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+    result: list[bytes] = []
+    matrix = fitz.Matrix(dpi / 72, dpi / 72)
+    for page in doc:
+        page_images = page.get_images(full=True)
+        if page_images:
+            xref = page_images[0][0]
+            base_img = doc.extract_image(xref)
+            result.append(base_img["image"])
+        else:
+            pix = page.get_pixmap(matrix=matrix, alpha=False)
+            result.append(pix.tobytes("jpeg", jpg_quality=85))
+    doc.close()
+    return result
+
+
 def download_drive_pdf(file_id: str, credentials: Credentials) -> bytes:
     drive = build_drive_client(credentials)
     request = drive.files().get_media(fileId=file_id)
