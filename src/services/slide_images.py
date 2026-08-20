@@ -3,7 +3,6 @@ from __future__ import annotations
 import io
 from pathlib import Path
 
-import fitz
 import httpx
 from google.oauth2.credentials import Credentials
 from googleapiclient.http import MediaFileUpload, MediaIoBaseDownload, MediaIoBaseUpload
@@ -60,6 +59,8 @@ def slides_to_page_images(
 
 
 def pdf_to_page_images(pdf_path: Path, dpi: int = 150) -> list[bytes]:
+    import fitz
+
     doc = fitz.open(str(pdf_path))
     images: list[bytes] = []
     matrix = fitz.Matrix(dpi / 72, dpi / 72)
@@ -71,6 +72,8 @@ def pdf_to_page_images(pdf_path: Path, dpi: int = 150) -> list[bytes]:
 
 
 def pdf_bytes_to_page_images(pdf_bytes: bytes, dpi: int = 150) -> list[bytes]:
+    import fitz
+
     doc = fitz.open(stream=pdf_bytes, filetype="pdf")
     images: list[bytes] = []
     matrix = fitz.Matrix(dpi / 72, dpi / 72)
@@ -88,6 +91,8 @@ def pdf_bytes_to_page_jpegs(pdf_bytes: bytes, dpi: int = 200) -> list[bytes]:
     vectorial, imágenes embebidas). Extraer solo la imagen embebida omite el
     texto superpuesto que es lo que queremos detectar con OCR.
     """
+    import fitz
+
     doc = fitz.open(stream=pdf_bytes, filetype="pdf")
     result: list[bytes] = []
     matrix = fitz.Matrix(dpi / 72, dpi / 72)
