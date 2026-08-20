@@ -58,6 +58,7 @@ export function similarIssueIds(issues: Issue[], anchor: Issue, fixableOnly = fa
         issue.issue_id
         && issue.slide === anchor.slide
         && issue.category === anchor.category
+        && issue.actual === anchor.actual
         && (!fixableOnly || hasFixMetadata(issue))
     )
     .map((issue) => issue.issue_id!);
