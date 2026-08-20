@@ -23,4 +23,4 @@ jobs:
         run: pytest tests/ -q --ignore=tests/test_api.py
 
       - name: Verify app starts
-        run: python -c "from src.api.main import app; print(app.title)"
+        run: python -c "from fastapi.testclient import TestClient; from src.api.main import app; r = TestClient(app).get('/health'); assert r.status_code == 200, r.text; print(r.json())"
