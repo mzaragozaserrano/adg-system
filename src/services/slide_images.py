@@ -84,21 +84,28 @@ def pdf_bytes_to_page_images(pdf_bytes: bytes, dpi: int = 150) -> list[bytes]:
     return images
 
 
-def pdf_bytes_to_page_jpegs(pdf_bytes: bytes, dpi: int = 200) -> list[bytes]:
+def pdf_bytes_to_page_jpegs(pdf_bytes: bytes, dpi: int = 150) -> list[bytes]:
     """Renderiza cada página del PDF completa (texto + imágenes) a JPEG.
 
     Se renderiza la página entera para capturar todas las capas (fondo, texto
     vectorial, imágenes embebidas). Extraer solo la imagen embebida omite el
     texto superpuesto que es lo que queremos detectar con OCR.
     """
+    import logging
+
     import fitz
 
+    logger = logging.getLogger(__name__)
     doc = fitz.open(stream=pdf_bytes, filetype="pdf")
     result: list[bytes] = []
     matrix = fitz.Matrix(dpi / 72, dpi / 72)
-    for page in doc:
+    logger.info("pdf_bytes_to_page_jpegs: %d páginas, dpi=%d, pdf=%d bytes", doc.page_count, dpi, len(pdf_bytes))
+    for i, page in enumerate(doc, start=1):
         pix = page.get_pixmap(matrix=matrix, alpha=False)
-        result.append(pix.tobytes("jpeg", jpg_quality=90))
+        jpeg = pix.tobytes("jpeg", jpg_quality=80)
+        result.append(jpeg)
+        logger.info("pdf_bytes_to_page_jpegs: página %d/%d → %d bytes jpeg", i, doc.page_count, len(jpeg))
+        pix = None
     doc.close()
     return result
 

@@ -303,12 +303,24 @@ def _detect_cover_text(
 
     if page_images:
         cover_blocks = _ocr_page(page_images[0], drive_service=drive_service)
+        logger.info(
+            "_detect_cover_text: %d bloques OCR en portada",
+            len(cover_blocks),
+        )
+        for block in cover_blocks:
+            logger.info(
+                "  cover block h=%.0f y0=%.0f text=%r",
+                block.height,
+                block.y0,
+                block.text[:80],
+            )
         if cover_blocks:
             img_w = max(b.x1 for b in cover_blocks) or 1024.0
             img_h = max(b.y1 for b in cover_blocks) or 576.0
             classified = classify_cover_slide(cover_blocks, img_w, img_h)
             for cb in classified:
                 text = cb.block.text.strip()
+                logger.info("  classified %s: %r", cb.role.value, text[:80])
                 if cb.role == BlockRole.COVER_TITLE and not cover_title:
                     cover_title = text
                 elif cb.role == BlockRole.COVER_SUBTITLE and not cover_subtitle:
@@ -317,6 +329,7 @@ def _detect_cover_text(
     if not cover_title:
         cover_title = infer_cover_title_from_filename(filename)
 
+    logger.info("_detect_cover_text result title=%r subtitle=%r", cover_title, cover_subtitle)
     return cover_title, cover_subtitle, classified
 
 
@@ -527,6 +540,13 @@ def build_layout(
     subtitle_override: str = "",
     pdf_bytes_direct: bytes | None = None,
 ) -> LayoutResult:
+    logger.info(
+        "build_layout: source_type=%s filename=%s pdf_direct=%s",
+        source_type,
+        filename,
+        len(pdf_bytes_direct) if pdf_bytes_direct else 0,
+    )
+
     slides_service = build_slides_client(credentials)
     drive_service = build_drive_client(credentials)
 
