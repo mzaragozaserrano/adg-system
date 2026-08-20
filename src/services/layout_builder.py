@@ -369,7 +369,7 @@ def _add_blank_slide(
     attempts: list[dict] = []
     if layout_id:
         attempts.append({
-            "addSlide": {
+            "createSlide": {
                 "objectId": slide_id,
                 "insertionIndex": insertion_index,
                 "slideLayoutReference": {"layoutId": layout_id},
@@ -377,14 +377,14 @@ def _add_blank_slide(
         })
     attempts += [
         {
-            "addSlide": {
+            "createSlide": {
                 "objectId": slide_id,
                 "insertionIndex": insertion_index,
                 "slideLayoutReference": {"predefinedLayout": "BLANK"},
             }
         },
         {
-            "addSlide": {
+            "createSlide": {
                 "objectId": slide_id,
                 "insertionIndex": insertion_index,
             }
@@ -401,10 +401,10 @@ def _add_blank_slide(
             return slide_id, ""
         except Exception as exc:
             last_error = str(exc)
-            logger.warning("addSlide falló (idx=%d): %s", insertion_index, exc)
+            logger.warning("createSlide falló (idx=%d): %s", insertion_index, exc)
 
     logger.error(
-        "No se pudo añadir diapositiva en índice %d para presentación %s: %s",
+        "No se pudo crear diapositiva en índice %d para presentación %s: %s",
         insertion_index,
         presentation_id,
         last_error,
@@ -607,7 +607,7 @@ def build_layout(
 
     if first_add_slide_error and len(skipped) == len(content_pages):
         raise RuntimeError(
-            f"addSlide falló en todas las diapositivas de contenido. "
+            f"createSlide falló en todas las diapositivas de contenido. "
             f"Primer error: {first_add_slide_error}"
         )
 
