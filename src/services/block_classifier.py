@@ -4,16 +4,17 @@ import re
 from dataclasses import dataclass
 from enum import Enum
 
-from src.services.ocr_blocks import OcrBlock
+from src.services.ocr_blocks import OcrBlock, OcrWord
 
 _SECTION_NUMBER_RE = re.compile(r"^\d{1,2}\.$")
 
-_COVER_NOISE_TOKENS = (
+_OCR_BRAND_NOISE_COMPACT = (
     "notebooklm",
-    "ad gravity",
     "adgravity",
-    "adg media",
-    "adg group",
+)
+_OCR_BRAND_NOISE_SUBSTRINGS = (
+    "ad gravity",
+    "notebook lm",
 )
 
 _SUBTITLE_MAX_HEIGHT_RATIO = 0.78
@@ -61,9 +62,26 @@ def _char_count(block: OcrBlock) -> int:
     return len(block.text.strip())
 
 
-def _is_cover_noise(block: OcrBlock, img_width: float, img_height: float) -> bool:
+def _normalize_noise_text(text: str) -> str:
+    return re.sub(r"[\s\-_]+", "", text.lower())
+
+
+def is_ocr_brand_noise(block: OcrBlock) -> bool:
     text = block.text.strip().lower()
-    if any(token in text for token in _COVER_NOISE_TOKENS):
+    if not text:
+        return False
+    compact = _normalize_noise_text(text)
+    if any(token in compact for token in _OCR_BRAND_NOISE_COMPACT):
+        return True
+    return any(token in text for token in _OCR_BRAND_NOISE_SUBSTRINGS)
+
+
+def filter_ocr_brand_noise(blocks: list[OcrBlock]) -> list[OcrBlock]:
+    return [b for b in blocks if not is_ocr_brand_noise(b)]
+
+
+def _is_cover_noise(block: OcrBlock, img_width: float, img_height: float) -> bool:
+    if is_ocr_brand_noise(block):
         return True
     if block.y1 > img_height * 0.93 and block.height < img_height * 0.06:
         return True
@@ -232,6 +250,10 @@ def classify_content_slide(
     if not blocks:
         return []
 
+    blocks = filter_ocr_brand_noise(blocks)
+    if not blocks:
+        return []
+
     if _detect_section_slide(blocks, img_width, img_height):
         return _classify_section_slide(blocks, img_width, img_height)
 
@@ -304,6 +326,10 @@ def _classify_section_slide(
     img_width: float,
     img_height: float,
 ) -> list[ClassifiedBlock]:
+    blocks = filter_ocr_brand_noise(blocks)
+    if not blocks:
+        return []
+
     max_h = max((b.height for b in blocks), default=1.0)
     result: list[ClassifiedBlock] = []
     section_num_assigned = False
