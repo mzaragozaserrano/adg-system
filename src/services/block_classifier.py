@@ -90,9 +90,7 @@ def _is_cover_noise(block: OcrBlock, img_width: float, img_height: float) -> boo
     return False
 
 
-def _line_ordered_words(words: list[OcrWord]) -> list[OcrWord]:
-    """Agrupa palabras por línea visual y ordena por x0 dentro de cada línea.
-    Evita el reordenamiento incorrecto causado por variaciones de y0 en la misma línea."""
+def _group_words_into_lines(words: list[OcrWord]) -> list[list[OcrWord]]:
     if not words:
         return []
 
@@ -116,8 +114,52 @@ def _line_ordered_words(words: list[OcrWord]) -> list[OcrWord]:
         line.sort(key=lambda w: w.x0)
 
     lines.sort(key=lambda line: min(w.y0 for w in line))
+    return lines
 
-    return [w for line in lines for w in line]
+
+def _line_ordered_words(words: list[OcrWord]) -> list[OcrWord]:
+    """Agrupa palabras por línea visual y ordena por x0 dentro de cada línea.
+    Evita el reordenamiento incorrecto causado por variaciones de y0 en la misma línea."""
+    return [w for line in _group_words_into_lines(words) for w in line]
+
+
+def _block_from_words(words: list[OcrWord]) -> OcrBlock:
+    block = OcrBlock()
+    block.words.extend(_line_ordered_words(words))
+    return block
+
+
+def _split_mixed_size_line(words: list[OcrWord]) -> list[list[OcrWord]]:
+    """Si una misma línea visual mezcla palabras grandes y pequeñas, las parte."""
+    if len(words) < 3:
+        return [words]
+    max_h = max(w.y1 - w.y0 for w in words)
+    large: list[OcrWord] = []
+    small: list[OcrWord] = []
+    for word in words:
+        if (word.y1 - word.y0) >= max_h * _SUBTITLE_MAX_HEIGHT_RATIO:
+            large.append(word)
+        else:
+            small.append(word)
+    if len(large) >= 1 and len(small) >= 2:
+        groups = [large, small]
+        groups.sort(key=lambda group: min(w.y0 for w in group))
+        return groups
+    return [words]
+
+
+def _explode_blocks_to_lines(blocks: list[OcrBlock]) -> list[OcrBlock]:
+    """Un bloque OCR puede mezclar título y subtítulo. Se parte en líneas visuales
+    para clasificar por altura de línea."""
+    exploded: list[OcrBlock] = []
+    for block in blocks:
+        lines = _group_words_into_lines(block.words)
+        if not lines:
+            continue
+        for line in lines:
+            for part in _split_mixed_size_line(line):
+                exploded.append(_block_from_words(part))
+    return exploded
 
 
 def _join_block_texts(blocks: list[OcrBlock]) -> OcrBlock:
@@ -209,7 +251,7 @@ def classify_cover_slide(
     if not main_blocks:
         main_blocks = [b for b in blocks if b.text.strip()]
 
-    sorted_blocks = sorted(main_blocks, key=lambda b: b.y0)
+    sorted_blocks = sorted(_explode_blocks_to_lines(main_blocks), key=lambda b: b.y0)
 
     title_blocks = _group_title_blocks(sorted_blocks)
     subtitle_blocks = _find_and_group_subtitle_blocks(sorted_blocks, title_blocks)

@@ -21,7 +21,49 @@ def _word(text: str, x0: float, y0: float, x1: float, y1: float) -> OcrWord:
     return OcrWord(text=text, x0=x0, y0=y0, x1=x1, y1=y1)
 
 
+def test_classify_cover_splits_merged_ocr_block_by_line_height():
+    """Vision API a veces devuelve título y subtítulo en un único bloque."""
+    block = OcrBlock()
+    block.words.extend([
+        _word("TOTAL", 80, 280, 220, 335),
+        _word("REACH", 230, 282, 400, 336),
+        _word("BLACK", 80, 345, 220, 400),
+        _word("FRIDAY", 230, 347, 400, 401),
+        _word("2026", 410, 346, 500, 400),
+        _word("Domina", 80, 420, 180, 448),
+        _word("la", 185, 421, 210, 447),
+        _word("atención", 215, 420, 340, 449),
+        _word("cuando", 345, 422, 450, 448),
+        _word("todos", 80, 455, 160, 482),
+        _word("compiten", 165, 456, 280, 483),
+        _word("por", 285, 455, 330, 481),
+        _word("ella.", 335, 456, 410, 482),
+    ])
+
+    classified = classify_cover_slide([block], img_width=1024, img_height=576)
+    roles = {cb.role: cb.block.text for cb in classified}
+
+    assert "TOTAL REACH" in roles[BlockRole.COVER_TITLE]
+    assert "BLACK FRIDAY 2026" in roles[BlockRole.COVER_TITLE]
+    assert "Domina" not in roles[BlockRole.COVER_TITLE]
+    assert "Domina" in roles[BlockRole.COVER_SUBTITLE]
+    assert "compiten por ella" in roles[BlockRole.COVER_SUBTITLE]
+
+
 def test_classify_cover_merges_title_lines_by_size():
+    blocks = [
+        _block("TOTAL REACH", y0=280, height=55),
+        _block("BLACK FRIDAY 2026", y0=345, height=55),
+        _block("Domina la atención cuando todos compiten por ella.", y0=420, height=30),
+        _block("ad gravity", y0=20, height=12, x0=700),
+        _block("NotebookLM", y0=530, height=10, x0=650),
+    ]
+
+    classified = classify_cover_slide(blocks, img_width=1024, img_height=576)
+
+    roles = {cb.role: cb.block.text for cb in classified}
+    assert roles[BlockRole.COVER_TITLE] == "TOTAL REACH BLACK FRIDAY 2026"
+    assert roles[BlockRole.COVER_SUBTITLE] == "Domina la atención cuando todos compiten por ella."
     blocks = [
         _block("TOTAL REACH", y0=280, height=55),
         _block("BLACK FRIDAY 2026", y0=345, height=55),
