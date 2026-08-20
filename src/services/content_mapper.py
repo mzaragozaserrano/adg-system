@@ -8,9 +8,11 @@ def map_cover_to_slots(
     classified: list[ClassifiedBlock],
     slots: list[TemplateSlot],
     filename_fallback: str = "",
+    title_override: str = "",
+    subtitle_override: str = "",
 ) -> dict[str, str]:
-    title_text = ""
-    subtitle_text = ""
+    title_text = title_override.strip()
+    subtitle_text = subtitle_override.strip()
 
     for cb in classified:
         text = cb.block.text.strip()

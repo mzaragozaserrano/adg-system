@@ -299,7 +299,8 @@ def _detect_cover_text(
     if page_images:
         cover_blocks = _ocr_page(page_images[0], drive_service=drive_service)
         if cover_blocks:
-            img_w, img_h = 1024.0, 576.0
+            img_w = max(b.x1 for b in cover_blocks) or 1024.0
+            img_h = max(b.y1 for b in cover_blocks) or 576.0
             classified = classify_cover_slide(cover_blocks, img_w, img_h)
             for cb in classified:
                 text = cb.block.text.strip()
@@ -332,6 +333,8 @@ def _fill_cover_from_template(
         classified_cover,
         slots,
         filename_fallback=cover_title,
+        title_override=cover_title,
+        subtitle_override=cover_subtitle,
     )
 
     if not mapping:
