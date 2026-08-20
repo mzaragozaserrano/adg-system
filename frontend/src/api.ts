@@ -122,17 +122,20 @@ export async function buildLayout(
   filename: string,
   titleOverride = "",
   subtitleOverride = "",
+  pdfFile?: File,
 ) {
+  const form = new FormData();
+  form.append("url_or_id", urlOrId || "local");
+  form.append("source_type", sourceType);
+  form.append("filename", filename);
+  form.append("title_override", titleOverride);
+  form.append("subtitle_override", subtitleOverride);
+  if (pdfFile) {
+    form.append("pdf_file", pdfFile);
+  }
   const response = await apiFetch("/layout/build", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      url_or_id: urlOrId,
-      source_type: sourceType,
-      filename,
-      title_override: titleOverride,
-      subtitle_override: subtitleOverride,
-    }),
+    body: form,
   });
   return response.json();
 }

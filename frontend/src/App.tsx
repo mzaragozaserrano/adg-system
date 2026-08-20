@@ -712,11 +712,20 @@ function MaquetadorDashboard({ onBack }: { onBack?: () => void }) {
   const [sourceUrl, setSourceUrl] = useState("");
   const [sourceName, setSourceName] = useState("");
   const [sourceType, setSourceType] = useState<"slides" | "pdf">("slides");
+  const [localPdfFile, setLocalPdfFile] = useState<File | null>(null);
   const [titleOverride, setTitleOverride] = useState("");
   const [subtitleOverride, setSubtitleOverride] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [result, setResult] = useState<LayoutBuildResult | null>(null);
+
+  function clearSelection() {
+    setSourceUrl("");
+    setSourceName("");
+    setSourceType("slides");
+    setLocalPdfFile(null);
+    setResult(null);
+  }
 
   async function handlePickFromDrive() {
     setError("");
@@ -733,25 +742,37 @@ function MaquetadorDashboard({ onBack }: { onBack?: () => void }) {
       setSourceUrl(picked.id);
       setSourceName(picked.name);
       setSourceType(isPdfMime(picked.mimeType) ? "pdf" : "slides");
+      setLocalPdfFile(null);
       setResult(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : "No se pudo abrir Google Drive");
     }
   }
 
+  function handleLocalPdfChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setLocalPdfFile(file);
+    setSourceName(file.name);
+    setSourceType("pdf");
+    setSourceUrl("local");
+    setResult(null);
+  }
+
   async function handleBuildLayout() {
-    const target = sourceUrl.trim();
-    if (!target) return;
+    const hasSource = localPdfFile !== null || sourceUrl.trim().length > 0;
+    if (!hasSource) return;
     setLoading(true);
     setError("");
     setResult(null);
     try {
       const data = await buildLayout(
-        target,
+        localPdfFile ? "local" : sourceUrl.trim(),
         sourceType,
         sourceName || "Presentacion",
         titleOverride.trim(),
         subtitleOverride.trim(),
+        localPdfFile ?? undefined,
       );
       setResult(data);
     } catch (e) {
@@ -760,6 +781,8 @@ function MaquetadorDashboard({ onBack }: { onBack?: () => void }) {
       setLoading(false);
     }
   }
+
+  const hasSource = localPdfFile !== null || sourceUrl.trim().length > 0;
 
   return (
     <div className="app">
@@ -785,24 +808,42 @@ function MaquetadorDashboard({ onBack }: { onBack?: () => void }) {
         <button className="btn btn-primary drive-picker-btn" onClick={handlePickFromDrive} disabled={loading}>
           Seleccionar desde Drive
         </button>
+        <div className="divider"><span>o</span></div>
+        <label className="btn btn-secondary" style={{ cursor: "pointer", display: "inline-block" }}>
+          Subir PDF desde el equipo
+          <input
+            type="file"
+            accept="application/pdf"
+            style={{ display: "none" }}
+            onChange={handleLocalPdfChange}
+            disabled={loading}
+          />
+        </label>
         {sourceName && (
           <p className="selected-file">
-            Archivo seleccionado: <strong>{sourceName}</strong> ({sourceType === "pdf" ? "PDF" : "Google Slides"})
+            Archivo seleccionado: <strong>{sourceName}</strong>{" "}
+            ({sourceType === "pdf" ? "PDF" : "Google Slides"})
+            {" "}<button className="btn btn-ghost btn-sm" onClick={clearSelection}>✕</button>
           </p>
         )}
-        <div className="divider"><span>o</span></div>
-        <input
-          type="text"
-          placeholder="https://docs.google.com/presentation/d/... o ID de archivo en Drive"
-          value={sourceUrl}
-          onChange={(e) => {
-            setSourceUrl(e.target.value);
-            setSourceName("");
-            setSourceType("slides");
-            setResult(null);
-          }}
-          disabled={loading}
-        />
+        {!localPdfFile && (
+          <>
+            <div className="divider"><span>o pega la URL / ID</span></div>
+            <input
+              type="text"
+              placeholder="https://docs.google.com/presentation/d/..."
+              value={sourceUrl === "local" ? "" : sourceUrl}
+              onChange={(e) => {
+                setSourceUrl(e.target.value);
+                setSourceName("");
+                setSourceType("slides");
+                setLocalPdfFile(null);
+                setResult(null);
+              }}
+              disabled={loading}
+            />
+          </>
+        )}
       </div>
 
       <div className="transcriber-config">
@@ -833,7 +874,7 @@ function MaquetadorDashboard({ onBack }: { onBack?: () => void }) {
         <button
           className="btn btn-primary"
           onClick={handleBuildLayout}
-          disabled={loading || !sourceUrl.trim()}
+          disabled={loading || !hasSource}
         >
           {loading ? "Maquetando..." : "Maquetar presentación"}
         </button>
