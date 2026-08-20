@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from config.settings import settings
-from src.api.routers import auth, presentations, transcriber
+from src.api.routers import auth, layout, presentations, transcriber
 from src.db.models import init_db
 
 
@@ -28,6 +28,7 @@ app.add_middleware(
 app.include_router(auth.router)
 app.include_router(presentations.router)
 app.include_router(transcriber.router)
+app.include_router(layout.router)
 
 
 @app.get("/health")

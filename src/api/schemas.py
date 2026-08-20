@@ -48,3 +48,20 @@ class TranscribeRequest(BaseModel):
     url_or_id: str = Field(..., min_length=5)
     slide_numbers: list[int] = Field(..., min_length=1)
     new_document: bool = False
+
+
+class LayoutBuildRequest(BaseModel):
+    url_or_id: str = Field(..., min_length=5)
+    source_type: str = Field("slides", pattern="^(slides|pdf)$")
+    filename: str = Field("Presentacion", min_length=1)
+    title_override: str = ""
+    subtitle_override: str = ""
+
+
+class LayoutBuildResponse(BaseModel):
+    presentation_url: str
+    presentation_id: str
+    slides_processed: int
+    skipped_slides: list[int]
+    cover_title: str
+    cover_subtitle: str
