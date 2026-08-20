@@ -1,8 +1,12 @@
 from __future__ import annotations
 
+import logging
+import uuid
 from dataclasses import dataclass, field
 
 from google.oauth2.credentials import Credentials
+
+logger = logging.getLogger(__name__)
 
 from config.brand_guidelines import (
     BRAND_FONT,
@@ -259,10 +263,14 @@ class LayoutResult:
 
 def _ocr_page(image_bytes: bytes) -> list[OcrBlock]:
     if not image_bytes:
+        logger.warning("_ocr_page: imagen vacía, se omite OCR")
         return []
     try:
-        return ocr_image_bytes_structured(image_bytes)
-    except Exception:
+        blocks = ocr_image_bytes_structured(image_bytes)
+        logger.info("_ocr_page: %d bloques detectados (%d bytes)", len(blocks), len(image_bytes))
+        return blocks
+    except Exception as exc:
+        logger.error("_ocr_page: error en Vision API: %s", exc)
         return []
 
 
@@ -343,42 +351,48 @@ def _add_blank_slide(
     insertion_index: int,
     layout_id: str | None,
 ) -> str | None:
+    slide_id = f"slide_{uuid.uuid4().hex[:16]}"
+
+    attempts: list[dict] = []
     if layout_id:
-        request = {
+        attempts.append({
             "addSlide": {
+                "objectId": slide_id,
                 "insertionIndex": insertion_index,
                 "slideLayoutReference": {"layoutId": layout_id},
             }
-        }
-    else:
-        request = {
+        })
+    attempts += [
+        {
             "addSlide": {
+                "objectId": slide_id,
                 "insertionIndex": insertion_index,
                 "slideLayoutReference": {"predefinedLayout": "BLANK"},
             }
-        }
-    try:
-        resp = slides_service.presentations().batchUpdate(
-            presentationId=presentation_id,
-            body={"requests": [request]},
-        ).execute()
-        for reply in resp.get("replies", []):
-            if "addSlide" in reply:
-                return reply["addSlide"].get("objectId")
-    except Exception:
-        pass
+        },
+        {
+            "addSlide": {
+                "objectId": slide_id,
+                "insertionIndex": insertion_index,
+            }
+        },
+    ]
 
-    try:
-        resp = slides_service.presentations().batchUpdate(
-            presentationId=presentation_id,
-            body={"requests": [{"addSlide": {"insertionIndex": insertion_index}}]},
-        ).execute()
-        for reply in resp.get("replies", []):
-            if "addSlide" in reply:
-                return reply["addSlide"].get("objectId")
-    except Exception:
-        pass
+    for attempt in attempts:
+        try:
+            slides_service.presentations().batchUpdate(
+                presentationId=presentation_id,
+                body={"requests": [attempt]},
+            ).execute()
+            return slide_id
+        except Exception as exc:
+            logger.warning("addSlide falló (idx=%d): %s", insertion_index, exc)
 
+    logger.error(
+        "No se pudo añadir diapositiva en índice %d para presentación %s",
+        insertion_index,
+        presentation_id,
+    )
     return None
 
 
@@ -532,6 +546,11 @@ def build_layout(
     content_pages = page_images[1:]
     skipped: list[int] = []
 
+    logger.info(
+        "build_layout: %d páginas de contenido a procesar (insert_index=%d, layout_id=%s)",
+        len(content_pages), content_insert_index, layout_id,
+    )
+
     for idx, img_bytes in enumerate(content_pages):
         slide_number = idx + 2
         insertion_index = content_insert_index + idx
@@ -539,8 +558,11 @@ def build_layout(
         page_id = _add_blank_slide(slides_service, new_id, insertion_index, layout_id)
 
         if not page_id:
+            logger.error("Slide %d: _add_blank_slide devolvió None, se omite", slide_number)
             skipped.append(slide_number)
             continue
+
+        logger.info("Slide %d: creada con page_id=%s", slide_number, page_id)
 
         blocks = _ocr_page(img_bytes)
 
@@ -549,10 +571,14 @@ def build_layout(
 
         content_requests = _build_content_slide_requests(page_id, classified, idx)
         if content_requests:
-            slides_service.presentations().batchUpdate(
-                presentationId=new_id,
-                body={"requests": content_requests},
-            ).execute()
+            try:
+                slides_service.presentations().batchUpdate(
+                    presentationId=new_id,
+                    body={"requests": content_requests},
+                ).execute()
+                logger.info("Slide %d: %d requests aplicados", slide_number, len(content_requests))
+            except Exception as exc:
+                logger.error("Slide %d: error al aplicar contenido: %s", slide_number, exc)
 
     url = f"https://docs.google.com/presentation/d/{new_id}/edit"
     current_pres = slides_service.presentations().get(presentationId=new_id).execute()
