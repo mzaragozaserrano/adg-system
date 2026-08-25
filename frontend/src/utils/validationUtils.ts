@@ -1,5 +1,6 @@
 import { ADG_PALETTE_OPTIONS } from "../constants/brandPalette";
 import type { FixState, Issue, ValidationResult } from "../types";
+import { categoryLabel } from "./issueLabels";
 
 export function hasFixMetadata(issue: Issue): boolean {
   return Boolean(issue.fix_type && issue.object_id && issue.fix_payload);
@@ -95,7 +96,7 @@ export function textGroupSignature(group: Issue[]): string {
 export function describeTextGroupProblems(group: Issue[]): string {
   return [...group]
     .sort((a, b) => issueProblemKey(a).localeCompare(issueProblemKey(b)))
-    .map((issue) => `${issue.category} «${issue.actual}»`)
+    .map((issue) => `${categoryLabel(issue.category)} «${issue.actual}»`)
     .join(", ");
 }
 

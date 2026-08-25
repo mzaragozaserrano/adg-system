@@ -605,9 +605,27 @@ p {
 .severity-tag, .category-tag {
   font-size: 0.7rem;
   font-weight: 700;
-  padding: 0.2rem 0.5rem;
-  border-radius: 4px;
-  background: rgba(255,255,255,0.06);
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  letter-spacing: 0.02em;
+}
+
+.severity-tag.severity-grave {
+  background: rgba(255, 107, 107, 0.16);
+  color: #ff8f8f;
+  border: 1px solid rgba(255, 107, 107, 0.35);
+}
+
+.severity-tag.severity-posible {
+  background: rgba(255, 193, 77, 0.14);
+  color: #ffd27d;
+  border: 1px solid rgba(255, 193, 77, 0.3);
+}
+
+.category-tag {
+  background: rgba(106, 150, 166, 0.16);
+  color: #b8d4df;
+  border: 1px solid rgba(106, 150, 166, 0.28);
 }
 
 .issue-message {
@@ -622,53 +640,20 @@ p {
 
 .color-palette-compare {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.75rem;
   margin-top: 0.75rem;
 }
 
-.color-palette-cell-wide {
-  min-width: 0;
-}
-
-.color-palette-options {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 0.45rem;
-  margin-top: 0.35rem;
-}
-
-.color-palette-option {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0.2rem;
-  border-radius: 8px;
-  border: 2px solid transparent;
-  background: transparent;
-  cursor: pointer;
-}
-
-.color-palette-option:hover {
-  border-color: rgba(255, 255, 255, 0.25);
-}
-
-.color-palette-option.selected {
-  border-color: var(--ok);
-  box-shadow: 0 0 0 1px rgba(78, 205, 196, 0.35);
-}
-
-.color-palette-option-swatch {
-  display: block;
-  width: 100%;
-  aspect-ratio: 1;
-  border-radius: 6px;
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.12);
-}
-
 .color-palette-select {
-  display: none;
+  width: 100%;
+  margin-top: 0.15rem;
+  padding: 0.45rem 0.55rem;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(0, 0, 0, 0.22);
+  color: var(--text);
+  font-size: 0.82rem;
 }
 
 .color-palette-cell {
@@ -701,17 +686,6 @@ p {
   font-size: 0.82rem;
   color: var(--muted);
   word-break: break-word;
-}
-
-.color-palette-select {
-  width: 100%;
-  margin-top: 0.15rem;
-  padding: 0.45rem 0.55rem;
-  border-radius: 6px;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  background: rgba(0, 0, 0, 0.22);
-  color: var(--text);
-  font-size: 0.82rem;
 }
 
 .color-palette-group-hint {
