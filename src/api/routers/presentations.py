@@ -8,6 +8,7 @@ from google.oauth2.credentials import Credentials
 from googleapiclient.errors import HttpError
 from sqlalchemy.orm import Session
 
+from config.settings import settings
 from src.api.deps import (
     assign_issue_ids,
     get_current_user,
@@ -68,7 +69,7 @@ def validate_slides_url(
     result.validation_id = str(validation_id)
 
     issue_slide_numbers = sorted({issue.slide_number for issue in result.issues})
-    if issue_slide_numbers:
+    if settings.thumbnails_enabled and issue_slide_numbers:
         try:
             warm_slide_thumbnails(creds, presentation_id, issue_slide_numbers)
         except Exception:
@@ -197,5 +198,7 @@ def slide_thumbnail(
     slide_number: int,
     creds: Credentials = Depends(get_google_credentials),
 ):
+    if not settings.thumbnails_enabled:
+        raise HTTPException(status_code=503, detail="Las miniaturas están desactivadas temporalmente")
     image_path = get_slide_thumbnail(creds, presentation_id, slide_number)
     return FileResponse(image_path, media_type="image/png")

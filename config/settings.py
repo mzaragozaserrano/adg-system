@@ -77,6 +77,7 @@ class Settings(BaseSettings):
     cors_origins: str = ""
 
     access_token_expire_minutes: int = 60 * 8
+    thumbnails_enabled: bool = False
     token_encryption_key: str = ""
 
     google_service_account_json: str = ""
