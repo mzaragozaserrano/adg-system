@@ -34,6 +34,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .finally(() => setLoading(false));
   }, []);
 
+  useEffect(() => {
+    function onSessionExpired() {
+      setUser(null);
+    }
+    window.addEventListener("adg:session-expired", onSessionExpired);
+    return () => window.removeEventListener("adg:session-expired", onSessionExpired);
+  }, []);
+
   async function login(token: string) {
     setToken(token);
     const me = await fetchMe();

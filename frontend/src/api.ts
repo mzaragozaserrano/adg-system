@@ -36,6 +36,10 @@ async function apiFetch(path: string, options: RequestInit = {}, retries = 2) {
           : Array.isArray(detail)
             ? detail.map((item: { msg?: string }) => item.msg || JSON.stringify(item)).join("; ")
             : JSON.stringify(body);
+      if (response.status === 401) {
+        clearToken();
+        window.dispatchEvent(new CustomEvent("adg:session-expired"));
+      }
       throw new Error(message || `Error de API (${response.status})`);
     }
     return response;

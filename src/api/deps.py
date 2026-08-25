@@ -32,8 +32,15 @@ def get_current_user(
         raise HTTPException(status_code=401, detail="Sesión expirada o cerrada. Vuelve a iniciar sesión.")
 
     user = db.query(User).filter(User.id == int(payload["sub"])).first()
+    if not user:
+        email = payload.get("email", "")
+        if email:
+            user = db.query(User).filter(User.email == email).first()
     if not user or not user.is_active:
-        raise HTTPException(status_code=401, detail="Usuario no encontrado")
+        raise HTTPException(
+            status_code=401,
+            detail="Sesión expirada. Por favor, vuelve a iniciar sesión.",
+        )
     return user
 
 
