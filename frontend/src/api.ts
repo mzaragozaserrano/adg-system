@@ -25,7 +25,12 @@ async function apiFetch(path: string, options: RequestInit = {}, retries = 2) {
       response = await fetch(`${API_BASE}${path}`, { ...options, headers });
     } catch {
       if (attempt < retries) continue;
-      throw new Error("El servidor no está disponible. Espera un momento y vuelve a intentar.");
+      const isWrite = options.method && options.method.toUpperCase() !== "GET";
+      throw new Error(
+        isWrite
+          ? "No se pudo conectar con el servidor. Comprueba tu conexión y vuelve a intentarlo."
+          : "El servidor no está disponible. Espera un momento y vuelve a intentar."
+      );
     }
     if (!response.ok) {
       const body = await response.json().catch(() => ({ detail: response.statusText }));
@@ -108,7 +113,7 @@ export async function fixPresentation(
       issues,
       mode,
     }),
-  });
+  }, 0);
   return response.json();
 }
 
