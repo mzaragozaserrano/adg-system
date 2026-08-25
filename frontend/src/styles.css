@@ -648,12 +648,29 @@ p {
 .color-palette-select {
   width: 100%;
   margin-top: 0.15rem;
-  padding: 0.45rem 0.55rem;
+  padding: 0.45rem 2rem 0.45rem 0.55rem;
   border-radius: 6px;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  background: rgba(0, 0, 0, 0.22);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background-color: rgba(255, 255, 255, 0.04);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8' fill='none'%3E%3Cpath d='M1 1.5L6 6.5L11 1.5' stroke='%236A96A6' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.65rem center;
   color: var(--text);
   font-size: 0.82rem;
+  color-scheme: dark;
+  appearance: none;
+  cursor: pointer;
+}
+
+.color-palette-select:focus {
+  outline: none;
+  border-color: rgba(106, 150, 166, 0.55);
+  box-shadow: 0 0 0 2px rgba(106, 150, 166, 0.18);
+}
+
+.color-palette-select option {
+  background: var(--surface-2);
+  color: var(--text);
 }
 
 .color-palette-cell {
