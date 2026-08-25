@@ -261,10 +261,13 @@ function ResultsView({
   const fixableInView = result.issues.filter((i) => i.is_fixable).length;
 
   useEffect(() => {
-    if (!thumbPresentationId) return;
-    const slideNums = Array.from(new Set(result.issues.map((issue) => issue.slide)));
+    if (!thumbPresentationId || result.source_type !== "slides") return;
+    const total = result.total_slides ?? 0;
+    const slideNums = total > 0
+      ? Array.from({ length: total }, (_, i) => i + 1)
+      : Array.from(new Set(result.issues.map((issue) => issue.slide)));
     preloadSlideThumbnails(thumbPresentationId, slideNums, onThumbnailCached);
-  }, [thumbPresentationId, result.validation_id, result.issues.length, onThumbnailCached]);
+  }, [thumbPresentationId, result.validation_id, result.total_slides, onThumbnailCached]);
 
   return (
     <div className="results">
