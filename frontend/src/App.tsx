@@ -26,14 +26,19 @@ import {
   buildFixPayload,
   enrichValidationResult,
   fixButtonLabel,
+  groupIssuesByText,
   hasFixMetadata,
+  shortenError,
   paletteGroupKey,
   removeIssuesFromResult,
   similarIssueIds,
+  similarTextGroups,
+  describeTextGroupProblems,
   slideSummary,
   slidesEditUrl,
 } from "./utils/validationUtils";
 import ColorPaletteCompare from "./components/ColorPaletteCompare";
+import { ADG_PALETTE_OPTIONS } from "./constants/brandPalette";
 import SimilarBulkDialog from "./components/SimilarBulkDialog";
 import SlideThumbnail, {
   clearThumbnailCache,
@@ -86,7 +91,6 @@ function ResultsView({
   onEnqueueFix,
   onDiscard,
   onThumbnailCached,
-  onClearBatchScope,
   fixStates,
   canFix,
   originalPresentationId,
@@ -103,7 +107,6 @@ function ResultsView({
   ) => void;
   onDiscard: (issueIds: string[]) => void;
   onThumbnailCached: () => void;
-  onClearBatchScope: () => void;
   fixStates: Record<string, FixState>;
   canFix: boolean;
   originalPresentationId: string | null;
@@ -114,7 +117,6 @@ function ResultsView({
 }) {
   const [severityFilter, setSeverityFilter] = useState<string[]>([]);
   const [categoryFilter, setCategoryFilter] = useState<string[]>([]);
-  const [selectedIssues, setSelectedIssues] = useState<Set<string>>(new Set());
   const [paletteSelections, setPaletteSelections] = useState<Record<string, string>>({});
   const [bulkPrompt, setBulkPrompt] = useState<BulkPromptState | null>(null);
 
@@ -123,7 +125,7 @@ function ResultsView({
     for (const issue of result.issues) {
       const key = paletteGroupKey(issue);
       if (!key || defaults[key]) continue;
-      const first = issue.color_suggestions?.[0]?.color || issue.color_suggested;
+      const first = issue.color_suggested || ADG_PALETTE_OPTIONS[0]?.color;
       if (first) defaults[key] = first;
     }
     setPaletteSelections(defaults);
@@ -137,7 +139,6 @@ function ResultsView({
   useEffect(() => {
     setSeverityFilter([]);
     setCategoryFilter([]);
-    setSelectedIssues(new Set());
   }, [result.validation_id]);
 
   const filtered = result.issues.filter((issue) => {
@@ -156,26 +157,6 @@ function ResultsView({
     .map(Number)
     .sort((a, b) => a - b);
 
-  const selectedFixable = Array.from(selectedIssues).filter((id) =>
-    result.issues.some((i) => i.issue_id === id)
-  );
-  const selectedFixableKey = selectedFixable.slice().sort().join(",");
-  const batchState: FixState = fixStates.batch || "idle";
-
-  useEffect(() => {
-    if (batchState === "fixing") return;
-    onClearBatchScope();
-  }, [selectedFixableKey, batchState, onClearBatchScope]);
-
-  function toggleIssue(id: string) {
-    setSelectedIssues((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  }
-
   function toggleFilter(
     value: string,
     setter: Dispatch<SetStateAction<string[]>>
@@ -187,17 +168,12 @@ function ResultsView({
 
   function discardIssues(issueIds: string[]) {
     onDiscard(issueIds);
-    setSelectedIssues((prev) => {
-      const next = new Set(prev);
-      issueIds.forEach((id) => next.delete(id));
-      return next;
-    });
   }
 
   function getPaletteSelection(issue: Issue): string {
     const key = paletteGroupKey(issue);
     if (!key) return issue.color_suggested || "";
-    return paletteSelections[key] || issue.color_suggestions?.[0]?.color || issue.color_suggested || "";
+    return paletteSelections[key] || issue.color_suggested || ADG_PALETTE_OPTIONS[0]?.color || "";
   }
 
   function setPaletteSelection(issue: Issue, color: string) {
@@ -231,6 +207,30 @@ function ResultsView({
       return;
     }
     setBulkPrompt({ action: "discard", anchor: issue, similarIds });
+  }
+
+  function requestGroupAction(issueGroup: Issue[], action: "fix" | "discard") {
+    const lead = issueGroup[0];
+    if (!lead) return;
+    const { currentIds, similarIds, matchCount } = similarTextGroups(
+      result.issues,
+      issueGroup,
+      action === "fix"
+    );
+    if (currentIds.length === 0) return;
+    if (matchCount <= 1) {
+      if (action === "fix") applyFix(currentIds);
+      else discardIssues(currentIds);
+      return;
+    }
+    setBulkPrompt({
+      action,
+      anchor: lead,
+      similarIds,
+      currentIds,
+      matchCount,
+      problemsLabel: describeTextGroupProblems(issueGroup),
+    });
   }
 
   function confirmBulkPrompt(issueIds: string[]) {
@@ -275,7 +275,7 @@ function ResultsView({
             <strong>Presentación en Google Slides</strong>
             <p>
               {fixableInView > 0
-                ? `Hay ${fixableInView} error(es) corregible(s). Expande cada diapositiva para usar «Corregir» o selección múltiple.`
+                ? `Hay ${fixableInView} error(es) corregible(s). Expande cada diapositiva para usar «Corregir».`
                 : "No hay errores corregibles automáticamente en esta validación."}
             </p>
           </div>
@@ -327,18 +327,6 @@ function ResultsView({
         </div>
       </div>
 
-      {canFix && selectedFixable.length > 0 && (
-        <div className="fix-actions">
-          <button
-            className={`btn btn-primary btn-fix-batch btn-fix-${batchState}`}
-            disabled={batchState === "fixing"}
-            onClick={() => onEnqueueFix(selectedFixable, "batch")}
-          >
-            {fixButtonLabel(batchState, `Corregir seleccionados (${selectedFixable.length})`)}
-          </button>
-        </div>
-      )}
-
       {workingPresentationId && appliedFixCount > 0 && fixedPresentationUrl && (
         <div className="export-bar">
           <div>
@@ -378,71 +366,99 @@ function ResultsView({
                 />
               )}
             </summary>
-            {issues.map((issue) => {
-              const issueState: FixState = issue.issue_id ? (fixStates[issue.issue_id] || "idle") : "idle";
-              const issueBusy = issueState === "fixing";
-              const paletteSuggestions =
-                issue.color_suggestions
-                || (issue.color_suggested
-                  ? [{ color: issue.color_suggested, label: issue.expected }]
-                  : []);
-              const groupKey = paletteGroupKey(issue);
-              const isPaletteIssue = Boolean(issue.color_actual && paletteSuggestions.length > 0);
+            {groupIssuesByText(issues).map((issueGroup) => {
+              const lead = issueGroup[0];
+              const cardSeverity = issueGroup.some((item) => item.severity === "grave") ? "grave" : "posible";
+              const groupBusy = issueGroup.some((item) => item.issue_id && fixStates[item.issue_id] === "fixing");
+              const fixableIds = issueGroup
+                .filter((item) => item.issue_id && item.is_fixable)
+                .map((item) => item.issue_id!);
+              const discardIds = issueGroup
+                .filter((item) => item.issue_id)
+                .map((item) => item.issue_id!);
+              const groupKeyBase = issueGroup.map((item) => item.issue_id).join("|") || `${lead.slide}-${lead.message}`;
               return (
-              <div key={issue.issue_id || `${issue.slide}-${issue.message}`} className={`issue-card issue-${issue.severity}`}>
-                <div className="issue-top-row">
-                  {canFix && issue.issue_id && (
-                    <label className="fix-checkbox">
-                      <input
-                        type="checkbox"
-                        checked={selectedIssues.has(issue.issue_id)}
-                        disabled={issueBusy}
-                        onChange={() => toggleIssue(issue.issue_id!)}
-                      />
-                      Seleccionar
-                    </label>
-                  )}
-                  <div className="issue-actions">
-                    {canFix && issue.issue_id && issue.is_fixable && (
-                      <button
-                        className={`btn btn-fix btn-fix-${issueState}`}
-                        disabled={issueBusy}
-                        onClick={() => requestFix(issue)}
-                      >
-                        {fixButtonLabel(issueState, "Corregir")}
-                      </button>
-                    )}
-                    {issue.issue_id && (
-                      <button
-                        className="btn btn-discard"
-                        disabled={issueBusy}
-                        onClick={() => requestDiscard(issue)}
-                      >
-                        Descartar
-                      </button>
-                    )}
-                  </div>
-                </div>
-                <div className="issue-header">
-                  <span className="severity-tag">{issue.severity_label}</span>
-                  <span className="category-tag">{issue.category}</span>
-                </div>
-                <p className="issue-message">{issue.message}</p>
-                {issue.text_preview && <p className="issue-preview">«{issue.text_preview}»</p>}
-                {isPaletteIssue && groupKey ? (
-                  <ColorPaletteCompare
-                    actual={issue.color_actual!}
-                    suggestions={paletteSuggestions}
-                    selected={getPaletteSelection(issue)}
-                    onSelect={(color) => setPaletteSelection(issue, color)}
-                    groupKey={groupKey}
-                  />
-                ) : (
-                  <div className="issue-meta">
-                    <div><strong>Esperado:</strong> {issue.expected}</div>
-                    <div><strong>Actual:</strong> {issue.actual}</div>
+              <div key={groupKeyBase} className={`issue-card issue-${cardSeverity}`}>
+                {lead.text_preview && <p className="issue-preview">«{lead.text_preview}»</p>}
+                {issueGroup.length > 1 && (
+                  <div className="issue-top-row">
+                    <span className="issue-group-count">{issueGroup.length} errores en este texto</span>
+                    <div className="issue-actions">
+                      {canFix && fixableIds.length > 1 && (
+                        <button
+                          className="btn btn-fix"
+                          disabled={groupBusy}
+                          onClick={() => requestGroupAction(issueGroup, "fix")}
+                        >
+                          Corregir todos
+                        </button>
+                      )}
+                      {discardIds.length > 1 && (
+                        <button
+                          className="btn btn-discard"
+                          disabled={groupBusy}
+                          onClick={() => requestGroupAction(issueGroup, "discard")}
+                        >
+                          Descartar todos
+                        </button>
+                      )}
+                    </div>
                   </div>
                 )}
+                {issueGroup.map((issue) => {
+                  const issueState: FixState = issue.issue_id ? (fixStates[issue.issue_id] || "idle") : "idle";
+                  const issueBusy = issueState === "fixing";
+                  const groupKey = paletteGroupKey(issue);
+                  const isPaletteIssue = Boolean(issue.color_actual);
+                  return (
+                    <div
+                      key={issue.issue_id || `${issue.slide}-${issue.category}-${issue.message}`}
+                      className="issue-item"
+                    >
+                      <div className="issue-top-row">
+                        <div className="issue-actions">
+                          {canFix && issue.issue_id && issue.is_fixable && (
+                            <button
+                              className={`btn btn-fix btn-fix-${issueState}`}
+                              disabled={issueBusy}
+                              onClick={() => requestFix(issue)}
+                            >
+                              {fixButtonLabel(issueState, "Corregir")}
+                            </button>
+                          )}
+                          {issue.issue_id && (
+                            <button
+                              className="btn btn-discard"
+                              disabled={issueBusy}
+                              onClick={() => requestDiscard(issue)}
+                            >
+                              Descartar
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                      <div className="issue-header">
+                        <span className="severity-tag">{issue.severity_label}</span>
+                        <span className="category-tag">{issue.category}</span>
+                      </div>
+                      <p className="issue-message">{issue.message}</p>
+                      {isPaletteIssue && groupKey ? (
+                        <ColorPaletteCompare
+                          actual={issue.color_actual!}
+                          options={ADG_PALETTE_OPTIONS}
+                          selected={getPaletteSelection(issue)}
+                          onSelect={(color) => setPaletteSelection(issue, color)}
+                          groupKey={groupKey}
+                        />
+                      ) : (
+                        <div className="issue-meta">
+                          <div><strong>Esperado:</strong> {issue.expected}</div>
+                          <div><strong>Actual:</strong> {issue.actual}</div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             );
             })}
@@ -542,9 +558,9 @@ function ValidatorDashboard({ onBack }: { onBack?: () => void }) {
     setThumbCacheVersion((value) => value + 1);
   }, []);
 
-  const { enqueue: enqueueFix, reset: resetFixQueue, clearBatchScope, fixStates } = useFixQueue(
+  const { enqueue: enqueueFix, reset: resetFixQueue, fixStates } = useFixQueue(
     executeFix,
-    (message) => setError(message)
+    (message) => setError(shortenError(message))
   );
 
   useEffect(() => {
@@ -665,7 +681,14 @@ function ValidatorDashboard({ onBack }: { onBack?: () => void }) {
         <p className="hint">Al validar se crea una copia de trabajo en Google Slides; las correcciones se aplican sobre ella sin modificar el original.</p>
       </div>
 
-      {error && <div className="error-banner">{error}</div>}
+      {error && (
+        <div className="error-banner">
+          <span>{error}</span>
+          <button type="button" className="btn btn-ghost" onClick={() => setError("")}>
+            Cerrar
+          </button>
+        </div>
+      )}
 
       {result && (
         <ResultsView
@@ -673,7 +696,6 @@ function ValidatorDashboard({ onBack }: { onBack?: () => void }) {
           onEnqueueFix={handleFix}
           onDiscard={handleDiscard}
           onThumbnailCached={handleThumbnailCached}
-          onClearBatchScope={clearBatchScope}
           fixStates={fixStates}
           canFix={canFix && !!workingPresentationId}
           originalPresentationId={originalPresentationId}

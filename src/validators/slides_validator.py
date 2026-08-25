@@ -136,6 +136,7 @@ class SlidesValidator:
                 is_section_span=(bbox, text) in section_keys,
                 object_id=span_data.get("object_id"),
                 text_range=span_data.get("text_range"),
+                placeholder_type=span_data.get("placeholder_type"),
             )
             issues.extend(validate_text_span(ctx))
 

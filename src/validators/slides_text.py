@@ -105,6 +105,20 @@ def _element_box(
     return (tx, ty, tx + width, ty + height)
 
 
+def utf16_len(text: str) -> int:
+    return len(text.encode("utf-16-le")) // 2
+
+
+def styleable_text_range(content: str, start_index: int) -> dict[str, int] | None:
+    trimmed = content.rstrip("\r\n")
+    if not trimmed:
+        return None
+    end_index = start_index + utf16_len(trimmed)
+    if end_index <= start_index:
+        return None
+    return {"start": start_index, "end": end_index}
+
+
 def _collect_runs_from_text(
     text_content: dict,
     bbox: tuple[float, float, float, float],
@@ -112,6 +126,7 @@ def _collect_runs_from_text(
     placeholder_type: str | None,
     theme_fonts: dict | None,
     spans: list[tuple[tuple[float, float, float, float], str, dict[str, Any]]],
+    cell_location: dict[str, int] | None = None,
 ) -> None:
     current_role = placeholder_type
     current_paragraph_style: dict = {}
@@ -124,20 +139,30 @@ def _collect_runs_from_text(
             if "placeholder" in marker:
                 current_role = marker["placeholder"].get("type", current_role)
 
+        if "textRun" not in text_element and "autoText" not in text_element:
+            continue
+
+        if "textRun" in text_element:
+            content = text_element["textRun"].get("content", "")
+        else:
+            content = text_element["autoText"].get("content", "")
+
+        start_index = text_element.get("startIndex", char_index)
+        end_index = text_element.get("endIndex", start_index + utf16_len(content))
+        char_index = end_index
+
         if "textRun" not in text_element:
             continue
 
-        text_run = text_element["textRun"]
-        content = text_run.get("content", "")
         stripped = content.strip()
-        start_index = char_index
-        end_index = char_index + len(content)
-        char_index = end_index
-
-        if not stripped:
+        text_range = styleable_text_range(content, start_index)
+        if not stripped or text_range is None:
             continue
 
-        style = text_run.get("style", {})
+        if cell_location:
+            text_range = {**text_range, **cell_location}
+
+        style = text_element["textRun"].get("style", {})
         font_family = resolve_slides_font_family(
             style,
             current_paragraph_style,
@@ -161,7 +186,8 @@ def _collect_runs_from_text(
             "light": light,
             "color_hex": color_hex,
             "object_id": object_id,
-            "text_range": {"start": start_index, "end": end_index},
+            "text_range": text_range,
+            "placeholder_type": current_role or placeholder_type,
         }
         spans.append((bbox, stripped, span_data))
 
@@ -221,8 +247,8 @@ def collect_slides_text_spans(
                     )
 
             if "table" in element:
-                for row in element["table"].get("tableRows", []):
-                    for cell in row.get("tableCells", []):
+                for row_index, row in enumerate(element["table"].get("tableRows", [])):
+                    for column_index, cell in enumerate(row.get("tableCells", [])):
                         if "text" in cell:
                             _collect_runs_from_text(
                                 cell["text"],
@@ -231,6 +257,7 @@ def collect_slides_text_spans(
                                 ph_type,
                                 theme_fonts,
                                 spans,
+                                cell_location={"rowIndex": row_index, "columnIndex": column_index},
                             )
 
     walk(slide.get("pageElements", []))

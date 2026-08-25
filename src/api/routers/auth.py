@@ -15,7 +15,13 @@ from src.auth.google_oauth import (
     load_oauth_session,
     persist_google_token,
 )
-from src.auth.security import create_access_token, decrypt_token
+from src.auth.security import (
+    create_access_token,
+    create_user_session,
+    decode_access_token,
+    decrypt_token,
+    revoke_user_session,
+)
 from src.db.models import User, get_db
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -99,7 +105,8 @@ def google_callback(
     db.commit()
     db.refresh(user)
 
-    token = create_access_token(user.id, user.email)
+    token, jti, expires_at = create_access_token(user.id, user.email)
+    create_user_session(db, user.id, jti, expires_at)
     response = RedirectResponse(frontend_callback_url(token))
     response.delete_cookie(_OAUTH_STATE_COOKIE, path="/")
     return response
@@ -126,5 +133,18 @@ def google_picker_config(creds=Depends(get_google_credentials)):
 
 
 @router.post("/logout")
-def logout():
+def logout(
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    auth_header = request.headers.get("Authorization", "")
+    if auth_header.startswith("Bearer "):
+        token = auth_header.removeprefix("Bearer ").strip()
+        try:
+            payload = decode_access_token(token)
+            jti = payload.get("jti")
+            if jti:
+                revoke_user_session(db, jti)
+        except Exception:
+            pass
     return {"ok": True}

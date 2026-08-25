@@ -1,12 +1,14 @@
 import base64
 import hashlib
 import json
+import secrets
 from datetime import datetime, timedelta, timezone
 
 from cryptography.fernet import Fernet, InvalidToken
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from jose import JWTError, jwt
+from sqlalchemy.orm import Session
 
 from config.settings import GOOGLE_SCOPES_FULL, settings
 
@@ -41,10 +43,12 @@ def credentials_from_encrypted(encrypted: str, scopes: list[str] | None = None) 
     return creds
 
 
-def create_access_token(user_id: int, email: str) -> str:
+def create_access_token(user_id: int, email: str) -> tuple[str, str, datetime]:
+    jti = secrets.token_hex(32)
     expire = datetime.now(timezone.utc) + timedelta(minutes=settings.access_token_expire_minutes)
-    payload = {"sub": str(user_id), "email": email, "exp": expire}
-    return jwt.encode(payload, settings.secret_key, algorithm="HS256")
+    payload = {"sub": str(user_id), "email": email, "exp": expire, "jti": jti}
+    token = jwt.encode(payload, settings.secret_key, algorithm="HS256")
+    return token, jti, expire
 
 
 def decode_access_token(token: str) -> dict:
@@ -52,6 +56,35 @@ def decode_access_token(token: str) -> dict:
         return jwt.decode(token, settings.secret_key, algorithms=["HS256"])
     except JWTError as exc:
         raise ValueError("Token de sesión inválido") from exc
+
+
+def create_user_session(db: Session, user_id: int, jti: str, expires_at: datetime) -> None:
+    from src.db.models import UserSession
+    session = UserSession(user_id=user_id, jti=jti, expires_at=expires_at)
+    db.add(session)
+    db.commit()
+
+
+def revoke_user_session(db: Session, jti: str) -> bool:
+    from src.db.models import UserSession
+    session = db.query(UserSession).filter(UserSession.jti == jti).first()
+    if not session or session.is_revoked:
+        return False
+    session.revoked_at = datetime.now(timezone.utc)
+    db.commit()
+    return True
+
+
+def is_session_valid(db: Session, jti: str) -> bool:
+    from src.db.models import UserSession
+    session = db.query(UserSession).filter(UserSession.jti == jti).first()
+    if not session:
+        return False
+    if session.is_revoked:
+        return False
+    if session.is_expired:
+        return False
+    return True
 
 
 def is_allowed_email(email: str) -> bool:

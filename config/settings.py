@@ -76,7 +76,7 @@ class Settings(BaseSettings):
     api_url: str = "http://localhost:8000"
     cors_origins: str = ""
 
-    access_token_expire_minutes: int = 60 * 24 * 7
+    access_token_expire_minutes: int = 60 * 8
     token_encryption_key: str = ""
 
     google_service_account_json: str = ""
