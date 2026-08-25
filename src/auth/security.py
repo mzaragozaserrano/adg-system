@@ -77,18 +77,25 @@ def revoke_user_session(db: Session, jti: str) -> bool:
 
 def is_session_valid(db: Session, jti: str, user_id: int | None = None, token_exp: datetime | None = None) -> bool:
     from src.db.models import UserSession
-    session = db.query(UserSession).filter(UserSession.jti == jti).first()
+    try:
+        session = db.query(UserSession).filter(UserSession.jti == jti).first()
+    except Exception:
+        # La tabla no existe todavía (primer arranque) u otro error de BD:
+        # fail-open para no bloquear el login con un JWT criptográficamente válido.
+        return True
+
     if session:
         if session.is_revoked:
             return False
-        if session.is_expired:
-            return False
+        try:
+            if session.is_expired:
+                return False
+        except Exception:
+            pass
         return True
 
-    # El registro no existe: puede que la BD se haya recreado tras un redeploy
-    # o reinicio del contenedor (almacenamiento efímero en Render).
-    # Si el JWT tiene firma válida y no ha expirado (ya verificado por decode_access_token),
-    # recreamos el registro para que los logouts explícitos sigan funcionando.
+    # El registro no existe: BD efímera recreada tras redeploy en Render.
+    # Recreamos la entrada para que el logout explícito siga funcionando.
     if user_id is None:
         return True
     expires_at = token_exp or (datetime.now(timezone.utc) + timedelta(minutes=60 * 8))
