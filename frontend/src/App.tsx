@@ -79,10 +79,22 @@ function AuthCallback() {
     }
     login(token)
       .then(() => navigate("/", { replace: true }))
-      .catch(() => setError("Error al iniciar sesión"));
+      .catch((err: unknown) => {
+        const msg = err instanceof Error ? err.message : "";
+        setError(msg || "Error al iniciar sesión");
+      });
   }, [params, login, navigate]);
 
-  if (error) return <div className="error-banner">{error}</div>;
+  if (error) return (
+    <div className="login-page">
+      <div className="login-card">
+        <div className="badge">ADG System · v2.1</div>
+        <h1>Error al iniciar sesión</h1>
+        <p style={{ color: "var(--color-error, #c0392b)" }}>{error}</p>
+        <a className="btn btn-primary" href={googleLoginUrl()}>Volver a intentar</a>
+      </div>
+    </div>
+  );
   return <div className="loading">Completando inicio de sesión...</div>;
 }
 
