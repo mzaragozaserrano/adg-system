@@ -45,6 +45,7 @@ import SlideThumbnail, {
   preloadSlideThumbnails,
 } from "./components/SlideThumbnail";
 import { useFixQueue } from "./features/validator/useFixQueue";
+import { categoryLabel, severityLabel } from "./utils/issueLabels";
 
 function LoginPage() {
   const { user, loading } = useAuth();
@@ -144,7 +145,8 @@ function ResultsView({
   }, [result.validation_id]);
 
   const categories = useMemo(
-    () => Array.from(new Set(result.issues.map((i) => i.category))),
+    () => Array.from(new Set(result.issues.map((i) => i.category)))
+      .sort((a, b) => categoryLabel(a).localeCompare(categoryLabel(b), "es")),
     [result.issues]
   );
 
@@ -324,7 +326,7 @@ function ResultsView({
               className={`pill ${severityFilter.includes(s) ? "active" : ""}`}
               onClick={() => toggleFilter(s, setSeverityFilter)}
             >
-              {s === "grave" ? "ERROR GRAVE" : "POSIBLE ERROR"}
+              {severityLabel(s)}
             </button>
           ))}
         </div>
@@ -336,7 +338,7 @@ function ResultsView({
               className={`pill ${categoryFilter.includes(c) ? "active" : ""}`}
               onClick={() => toggleFilter(c, setCategoryFilter)}
             >
-              {c}
+              {categoryLabel(c)}
             </button>
           ))}
         </div>
@@ -453,8 +455,10 @@ function ResultsView({
                         </div>
                       </div>
                       <div className="issue-header">
-                        <span className="severity-tag">{issue.severity_label}</span>
-                        <span className="category-tag">{issue.category}</span>
+                        <span className={`severity-tag severity-${issue.severity}`}>
+                          {severityLabel(issue.severity, issue.severity_label)}
+                        </span>
+                        <span className="category-tag">{categoryLabel(issue.category)}</span>
                       </div>
                       <p className="issue-message">{issue.message}</p>
                       {isPaletteIssue && groupKey ? (
