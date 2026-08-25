@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { fetchThumbnail } from "../api";
+import { THUMBNAILS_ENABLED } from "../constants/features";
 
 const thumbnailCache = new Map<string, string>();
 
@@ -22,6 +23,10 @@ export function preloadSlideThumbnails(
   slideNumbers: number[],
   onLoaded?: () => void
 ) {
+  if (!THUMBNAILS_ENABLED) {
+    onLoaded?.();
+    return;
+  }
   const pending = slideNumbers.filter(
     (n) => !thumbnailCache.has(thumbnailCacheKey(presentationId, n))
   );
@@ -75,11 +80,12 @@ export default function SlideThumbnail({
 }) {
   const cacheKey = thumbnailCacheKey(presentationId, slideNumber);
   const [src, setSrc] = useState<string | null>(() => thumbnailCache.get(cacheKey) || null);
-  const [loading, setLoading] = useState(!thumbnailCache.has(cacheKey));
+  const [loading, setLoading] = useState(THUMBNAILS_ENABLED && !thumbnailCache.has(cacheKey));
   const [retryCount, setRetryCount] = useState(0);
   const activeRef = useRef(true);
 
   const load = useCallback(() => {
+    if (!THUMBNAILS_ENABLED) return;
     const cached = thumbnailCache.get(cacheKey);
     if (cached) {
       setSrc(cached);
@@ -104,12 +110,22 @@ export default function SlideThumbnail({
   }, [cacheKey, presentationId, slideNumber]);
 
   useEffect(() => {
+    if (!THUMBNAILS_ENABLED) return;
     activeRef.current = true;
     load();
     return () => { activeRef.current = false; };
   }, [load, cacheVersion, retryCount]);
 
   const className = variant === "issue" ? "slide-thumb slide-thumb-issue" : "slide-thumb slide-thumb-summary";
+
+  if (!THUMBNAILS_ENABLED) {
+    return (
+      <div className={`${className} slide-thumb-placeholder`} aria-label={`Diapositiva ${slideNumber}`}>
+        <span>{slideNumber}</span>
+      </div>
+    );
+  }
+
   const hasSrc = Boolean(src);
 
   if (loading) {
