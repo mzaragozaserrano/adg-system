@@ -22,7 +22,13 @@ def get_current_user(
         raise HTTPException(status_code=401, detail=str(exc)) from exc
 
     jti = payload.get("jti")
-    if not jti or not is_session_valid(db, jti):
+    if not jti:
+        raise HTTPException(status_code=401, detail="Sesión expirada o cerrada. Vuelve a iniciar sesión.")
+    from datetime import datetime, timezone
+    token_exp = payload.get("exp")
+    exp_dt = datetime.fromtimestamp(token_exp, tz=timezone.utc) if token_exp else None
+    user_id = int(payload["sub"]) if payload.get("sub") else None
+    if not is_session_valid(db, jti, user_id=user_id, token_exp=exp_dt):
         raise HTTPException(status_code=401, detail="Sesión expirada o cerrada. Vuelve a iniciar sesión.")
 
     user = db.query(User).filter(User.id == int(payload["sub"])).first()
