@@ -116,19 +116,32 @@ def normalize_hex(hex_color: str) -> str:
     return normalized
 
 
-def palette_violation_metadata(hex_color: str, limit: int = 3) -> dict:
+def all_palette_color_options() -> list[dict[str, str]]:
+    ordered = [
+        ADG_PALETTE["petrol_blue"],
+        ADG_PALETTE["blanco"],
+        ADG_PALETTE["platino"],
+        ADG_PALETTE["obsidian_blue"],
+        ADG_PALETTE["azul_digital"],
+        ADG_PALETTE["acero_glaciar"],
+        "#FFFFFF",
+        "#000000",
+    ]
+    return [
+        {"color": normalize_hex(color), "label": describe_palette_color(color)}
+        for color in ordered
+    ]
+
+
+def palette_violation_metadata(hex_color: str) -> dict:
     normalized = normalize_hex(hex_color)
-    suggestions = nearest_palette_colors(normalized, limit)
-    primary = suggestions[0]
+    primary = nearest_palette_color(normalized)
     return {
-        "expected": describe_palette_color(primary),
+        "expected": "Color de la paleta ADG",
         "actual": normalized,
         "color_actual": normalized,
         "color_suggested": primary,
-        "color_suggestions": [
-            {"color": suggested, "label": describe_palette_color(suggested)}
-            for suggested in suggestions
-        ],
+        "color_suggestions": all_palette_color_options(),
     }
 
 

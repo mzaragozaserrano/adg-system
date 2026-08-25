@@ -1,7 +1,10 @@
+import json
+import uuid
 from pathlib import Path
 from typing import Any
 
 from google.oauth2.credentials import Credentials
+from googleapiclient.errors import HttpError
 from googleapiclient.http import MediaIoBaseDownload
 
 from config.settings import settings
@@ -22,6 +25,55 @@ def issue_from_fix_input(data: dict[str, Any]) -> ValidationIssue:
         fix_payload=data["fix_payload"],
         issue_id=data.get("issue_id"),
     )
+
+
+def parse_google_http_error(exc: HttpError) -> str:
+    raw = ""
+    try:
+        content = exc.content.decode("utf-8") if isinstance(exc.content, bytes) else exc.content
+        payload = json.loads(content)
+        raw = str(payload.get("error", {}).get("message") or "")
+    except Exception:
+        raw = str(exc)
+    lowered = raw.lower()
+    if "font" in lowered:
+        return (
+            "Google Slides no pudo aplicar la fuente corporativa. "
+            "Vuelve a pulsar Reintentar; si persiste, abre la copia de trabajo y cambia la fuente a Helvetica Neue."
+        )
+    if "range" in lowered or "index" in lowered:
+        return "Google Slides rechazó el rango de texto al aplicar la corrección."
+    if raw:
+        first_line = raw.split("\n", 1)[0].strip()
+        if len(first_line) > 220:
+            first_line = first_line[:217] + "..."
+        return f"No se pudo aplicar la corrección: {first_line}"
+    return "No se pudo aplicar la corrección en Google Slides"
+
+
+def text_range_spec(text_range: dict | None) -> dict[str, Any]:
+    if not text_range:
+        return {"type": "ALL"}
+    start = int(text_range.get("start", 0))
+    end = int(text_range.get("end", 0))
+    if end <= start:
+        return {"type": "ALL"}
+    return {
+        "type": "FIXED_RANGE",
+        "startIndex": start,
+        "endIndex": end,
+    }
+
+
+def cell_location_from_range(text_range: dict | None) -> dict[str, int] | None:
+    if not text_range:
+        return None
+    if "rowIndex" not in text_range or "columnIndex" not in text_range:
+        return None
+    return {
+        "rowIndex": int(text_range["rowIndex"]),
+        "columnIndex": int(text_range["columnIndex"]),
+    }
 
 
 class SlidesFixer:
@@ -64,12 +116,26 @@ class SlidesFixer:
             raise ValueError(f"Modo de corrección no soportado: {mode}")
 
         requests = self._build_requests(fixable)
-        if requests:
-            self._slides.presentations().batchUpdate(
-                presentationId=target_id,
-                body={"requests": requests},
-            ).execute()
-            invalidate_presentation_cache(target_id)
+        font_families = [
+            str(issue.fix_payload.get("font_family"))
+            for issue in fixable
+            if issue.fix_type == "font_family" and issue.fix_payload and issue.fix_payload.get("font_family")
+        ]
+        dummy_ids: list[str] = []
+        try:
+            if font_families:
+                dummy_ids = self._preload_fonts(target_id, font_families)
+            if requests:
+                try:
+                    self._slides.presentations().batchUpdate(
+                        presentationId=target_id,
+                        body={"requests": requests},
+                    ).execute()
+                except HttpError as exc:
+                    raise ValueError(parse_google_http_error(exc)) from exc
+                invalidate_presentation_cache(target_id)
+        finally:
+            self._delete_objects(target_id, dummy_ids)
 
         return FixResult(
             source_presentation_id=original_presentation_id or presentation_id,
@@ -86,6 +152,87 @@ class SlidesFixer:
         metadata = self._drive.files().get(fileId=file_id, fields="name").execute()
         return metadata.get("name", "Presentación")
 
+    def _preload_fonts(self, presentation_id: str, font_families: list[str]) -> list[str]:
+        unique = [family for family in dict.fromkeys(font_families) if family]
+        if not unique:
+            return []
+        try:
+            presentation = self._slides.presentations().get(
+                presentationId=presentation_id,
+                fields="slides.objectId",
+            ).execute()
+        except HttpError:
+            return []
+        slides = presentation.get("slides")
+        if not isinstance(slides, list) or not slides:
+            return []
+        page_id = slides[0]["objectId"]
+        dummy_ids: list[str] = []
+        requests: list[dict[str, Any]] = []
+        for family in unique:
+            dummy_id = f"adgFontLoad{uuid.uuid4().hex[:10]}"
+            dummy_ids.append(dummy_id)
+            requests.extend(
+                [
+                    {
+                        "createShape": {
+                            "objectId": dummy_id,
+                            "shapeType": "TEXT_BOX",
+                            "elementProperties": {
+                                "pageObjectId": page_id,
+                                "size": {
+                                    "width": {"magnitude": 1, "unit": "PT"},
+                                    "height": {"magnitude": 1, "unit": "PT"},
+                                },
+                                "transform": {
+                                    "scaleX": 1,
+                                    "scaleY": 1,
+                                    "translateX": 0,
+                                    "translateY": 0,
+                                    "unit": "EMU",
+                                },
+                            },
+                        }
+                    },
+                    {
+                        "insertText": {
+                            "objectId": dummy_id,
+                            "text": "A",
+                        }
+                    },
+                    {
+                        "updateTextStyle": {
+                            "objectId": dummy_id,
+                            "style": {
+                                "fontFamily": family,
+                                "weightedFontFamily": {"fontFamily": family, "weight": 400},
+                            },
+                            "fields": "fontFamily,weightedFontFamily",
+                            "textRange": {"type": "ALL"},
+                        }
+                    },
+                ]
+            )
+        try:
+            self._slides.presentations().batchUpdate(
+                presentationId=presentation_id,
+                body={"requests": requests},
+            ).execute()
+        except HttpError:
+            return []
+        return dummy_ids
+
+    def _delete_objects(self, presentation_id: str, object_ids: list[str]) -> None:
+        if not object_ids:
+            return
+        try:
+            self._slides.presentations().batchUpdate(
+                presentationId=presentation_id,
+                body={"requests": [{"deleteObject": {"objectId": object_id}} for object_id in object_ids]},
+            ).execute()
+        except HttpError:
+            return
+
     def _build_requests(self, issues: list[ValidationIssue]) -> list[dict[str, Any]]:
         requests: list[dict[str, Any]] = []
         for issue in issues:
@@ -97,13 +244,18 @@ class SlidesFixer:
         return requests
 
     def _issue_to_request(self, issue: ValidationIssue) -> dict[str, Any] | None:
-        text_range = issue.text_range or {"start": 0, "end": 1}
+        text_range = issue.text_range
         fields: list[str] = []
         style: dict[str, Any] = {}
 
         if issue.fix_type == "font_family":
-            style["fontFamily"] = issue.fix_payload["font_family"]
-            fields.append("fontFamily")
+            family = issue.fix_payload["font_family"]
+            style["fontFamily"] = family
+            style["weightedFontFamily"] = {
+                "fontFamily": family,
+                "weight": issue.fix_payload.get("weight", 400),
+            }
+            fields.extend(["fontFamily", "weightedFontFamily"])
         elif issue.fix_type == "font_weight":
             if issue.fix_payload.get("bold") is True:
                 style["bold"] = True
@@ -168,18 +320,16 @@ class SlidesFixer:
         if not fields:
             return None
 
-        return {
-            "updateTextStyle": {
-                "objectId": issue.object_id,
-                "textRange": {
-                    "type": "FIXED_RANGE",
-                    "startIndex": text_range["start"],
-                    "endIndex": text_range["end"],
-                },
-                "style": style,
-                "fields": ",".join(fields),
-            }
+        update: dict[str, Any] = {
+            "objectId": issue.object_id,
+            "textRange": text_range_spec(text_range),
+            "style": style,
+            "fields": ",".join(fields),
         }
+        cell_location = cell_location_from_range(text_range)
+        if cell_location:
+            update["cellLocation"] = cell_location
+        return {"updateTextStyle": update}
 
     def export(self, presentation_id: str, export_format: str = "pdf") -> tuple[Path, str]:
         mime_map = {

@@ -7,6 +7,23 @@ from src.validators.models import Severity, ValidationIssue
 from src.validators.rules import expected_font_description, is_approved_font, is_index_number, is_top_left_aligned
 
 
+_BODY_PLACEHOLDER_TYPES = frozenset({
+    "BODY",
+    "BODY_WITH_OVERLAY",
+    "OBJECT",
+    "PICTURE",
+    "CHART",
+    "TABLE",
+    "MEDIA",
+    "SLIDE_NUMBER",
+    "FOOTER",
+    "DATE_AND_TIME",
+})
+
+_TITLE_PLACEHOLDER_TYPES = frozenset({"TITLE", "CENTERED_TITLE"})
+_SUBTITLE_PLACEHOLDER_TYPES = frozenset({"SUBTITLE"})
+
+
 @dataclass
 class TextSpanContext:
     slide_number: int
@@ -23,6 +40,7 @@ class TextSpanContext:
     object_id: str | None = None
     text_range: dict[str, int] | None = None
     extra_skip: bool = False
+    placeholder_type: str | None = None
 
 
 def validate_text_span(ctx: TextSpanContext) -> list[ValidationIssue]:
@@ -83,10 +101,35 @@ def validate_text_span(ctx: TextSpanContext) -> list[ValidationIssue]:
     if ctx.size <= 0:
         return issues
 
-    if not is_top_left_aligned(ctx.bbox, ctx.page_width, ctx.page_height):
+    if is_index_number(ctx.text):
         return issues
 
-    if is_index_number(ctx.text):
+    ph = (ctx.placeholder_type or "").upper()
+
+    # Contenido de placeholders de cuerpo: no aplicar reglas de título/subtítulo
+    if ph in _BODY_PLACEHOLDER_TYPES:
+        return issues
+
+    # Placeholders explícitos de título o subtítulo: validar siempre,
+    # independientemente de la posición en la diapositiva
+    if ph in _TITLE_PLACEHOLDER_TYPES or ph in _SUBTITLE_PLACEHOLDER_TYPES:
+        issues.extend(
+            validate_header_subtitle(
+                ctx.slide_number,
+                ctx.text,
+                ctx.font,
+                ctx.size,
+                ctx.flags,
+                ctx.color_hex,
+                ctx.location,
+                object_id=ctx.object_id,
+                text_range=ctx.text_range,
+            )
+        )
+        return issues
+
+    # Texto libre (sin placeholder): usar heurística de posición superior-izquierda
+    if not is_top_left_aligned(ctx.bbox, ctx.page_width, ctx.page_height):
         return issues
 
     issues.extend(

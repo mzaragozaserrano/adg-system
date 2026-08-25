@@ -104,6 +104,14 @@ export async function fetchValidation(id: number) {
   return response.json();
 }
 
+export async function logoutSession(): Promise<void> {
+  try {
+    await apiFetch("/auth/logout", { method: "POST" });
+  } catch {
+    // aunque falle en red el token local se elimina igualmente
+  }
+}
+
 export function googleLoginUrl() {
   return `${API_BASE}/auth/google`;
 }

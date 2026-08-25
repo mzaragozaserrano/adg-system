@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
-import { clearToken, fetchMe, getToken, setToken } from "./api";
+import { clearToken, fetchMe, getToken, logoutSession, setToken } from "./api";
 
 interface User {
   id: number;
@@ -40,8 +40,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   function logout() {
-    clearToken();
-    setUser(null);
+    logoutSession().finally(() => {
+      clearToken();
+      setUser(null);
+    });
   }
 
   return (

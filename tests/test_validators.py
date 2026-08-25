@@ -15,6 +15,7 @@ from src.validators.rules import (
     resolve_slides_font_size,
 )
 from src.validators.color_utils import (
+    all_palette_color_options,
     describe_palette_color,
     nearest_palette_color,
     nearest_palette_colors,
@@ -22,7 +23,14 @@ from src.validators.color_utils import (
     suggest_palette_color,
 )
 from src.validators.section_slides import detect_section_slide, validate_section_slide
-from src.validators.slides_text import resolve_slides_bold, resolve_slides_light
+from src.validators.slides_text import (
+    collect_slides_text_spans,
+    resolve_slides_bold,
+    resolve_slides_light,
+    styleable_text_range,
+    utf16_len,
+)
+from src.validators.text_span_rules import TextSpanContext, validate_text_span
 from src.validators.slides_validator import extract_presentation_id
 
 
@@ -173,12 +181,277 @@ def test_suggest_palette_color_description():
     assert description == "Acero Glaciar (#6A96A6)"
 
 
-def test_palette_violation_metadata_includes_swatches():
+def test_all_palette_color_options_returns_full_palette():
+    options = all_palette_color_options()
+    assert len(options) == 8
+    assert options[0]["color"] == "#02445B"
+    assert any(item["color"] == "#000000" for item in options)
+
+
+def test_palette_violation_metadata_includes_all_palette_colors():
     metadata = palette_violation_metadata("#5E5E5E")
     assert metadata["color_actual"] == "#5E5E5E"
     assert metadata["color_suggested"] == "#6A96A6"
-    assert len(metadata["color_suggestions"]) == 3
-    assert metadata["color_suggestions"][0]["color"] == "#6A96A6"
+    assert len(metadata["color_suggestions"]) == 8
+    assert metadata["color_suggestions"][0]["color"] == "#02445B"
+    assert any(item["color"] == "#000000" for item in metadata["color_suggestions"])
+
+
+def test_styleable_text_range_excludes_trailing_newline():
+    assert styleable_text_range("Hello\n", 0) == {"start": 0, "end": 5}
+    assert styleable_text_range("Hello\n", 6) == {"start": 6, "end": 11}
+    assert styleable_text_range("\n", 0) is None
+
+
+def test_utf16_len_counts_emoji_as_google_slides():
+    assert utf16_len("👍") == 2
+    assert utf16_len("Hi") == 2
+
+
+def test_collect_slides_text_spans_excludes_paragraph_newline():
+    slide = {
+        "pageElements": [
+            {
+                "objectId": "box1",
+                "transform": {"scaleX": 1, "scaleY": 1, "translateX": 0, "translateY": 0},
+                "size": {
+                    "width": {"magnitude": 100, "unit": "PT"},
+                    "height": {"magnitude": 40, "unit": "PT"},
+                },
+                "shape": {
+                    "text": {
+                        "textElements": [
+                            {"endIndex": 6, "paragraphMarker": {"style": {}}},
+                            {
+                                "endIndex": 6,
+                                "textRun": {
+                                    "content": "Hello\n",
+                                    "style": {
+                                        "fontFamily": "Arial",
+                                        "fontSize": {"magnitude": 12, "unit": "PT"},
+                                    },
+                                },
+                            },
+                        ]
+                    }
+                },
+            }
+        ]
+    }
+    spans = collect_slides_text_spans(slide, None)
+    assert len(spans) == 1
+    assert spans[0][1] == "Hello"
+    assert spans[0][2]["text_range"] == {"start": 0, "end": 5}
+    assert spans[0][2]["font"] == "Arial"
+
+
+def test_collect_slides_text_spans_second_paragraph_uses_api_start_index():
+    slide = {
+        "pageElements": [
+            {
+                "objectId": "box1",
+                "transform": {"scaleX": 1, "scaleY": 1, "translateX": 0, "translateY": 0},
+                "size": {
+                    "width": {"magnitude": 100, "unit": "PT"},
+                    "height": {"magnitude": 40, "unit": "PT"},
+                },
+                "shape": {
+                    "text": {
+                        "textElements": [
+                            {"endIndex": 6, "paragraphMarker": {"style": {}}},
+                            {
+                                "endIndex": 6,
+                                "textRun": {
+                                    "content": "Hello\n",
+                                    "style": {
+                                        "fontFamily": "Arial",
+                                        "fontSize": {"magnitude": 12, "unit": "PT"},
+                                    },
+                                },
+                            },
+                            {"startIndex": 6, "endIndex": 12, "paragraphMarker": {"style": {}}},
+                            {
+                                "startIndex": 6,
+                                "endIndex": 12,
+                                "textRun": {
+                                    "content": "World\n",
+                                    "style": {
+                                        "fontFamily": "Arial",
+                                        "fontSize": {"magnitude": 12, "unit": "PT"},
+                                    },
+                                },
+                            },
+                        ]
+                    }
+                },
+            }
+        ]
+    }
+    spans = collect_slides_text_spans(slide, None)
+    assert [span[2]["text_range"] for span in spans] == [
+        {"start": 0, "end": 5},
+        {"start": 6, "end": 11},
+    ]
+
+
+def test_collect_slides_text_spans_includes_table_cell_location():
+    slide = {
+        "pageElements": [
+            {
+                "objectId": "table1",
+                "transform": {"scaleX": 1, "scaleY": 1, "translateX": 0, "translateY": 0},
+                "size": {
+                    "width": {"magnitude": 200, "unit": "PT"},
+                    "height": {"magnitude": 80, "unit": "PT"},
+                },
+                "table": {
+                    "tableRows": [
+                        {
+                            "tableCells": [
+                                {
+                                    "text": {
+                                        "textElements": [
+                                            {"endIndex": 6, "paragraphMarker": {"style": {}}},
+                                            {
+                                                "endIndex": 6,
+                                                "textRun": {
+                                                    "content": "Celta\n",
+                                                    "style": {
+                                                        "fontFamily": "Arial",
+                                                        "fontSize": {"magnitude": 12, "unit": "PT"},
+                                                    },
+                                                },
+                                            },
+                                        ]
+                                    }
+                                }
+                            ]
+                        }
+                    ]
+                },
+            }
+        ]
+    }
+    spans = collect_slides_text_spans(slide, None)
+    assert spans[0][2]["text_range"] == {
+        "start": 0,
+        "end": 5,
+        "rowIndex": 0,
+        "columnIndex": 0,
+    }
+
+
+def _make_ctx(**kwargs) -> TextSpanContext:
+    defaults = dict(
+        slide_number=1,
+        text="Texto de prueba",
+        bbox=(10.0, 10.0, 200.0, 30.0),
+        page_width=720.0,
+        page_height=405.0,
+        font="Helvetica Neue",
+        size=14.0,
+        flags=0,
+        color_hex="#01222E",
+        location="superior-izquierda",
+    )
+    defaults.update(kwargs)
+    return TextSpanContext(**defaults)
+
+
+def test_body_placeholder_skips_header_subtitle_check():
+    ctx = _make_ctx(
+        size=14.0,
+        placeholder_type="BODY",
+        bbox=(10.0, 80.0, 600.0, 100.0),
+    )
+    issues = validate_text_span(ctx)
+    header_issues = [i for i in issues if "subtítulo" in i.message.lower() or "título" in i.message.lower()]
+    assert not header_issues, "Texto en placeholder BODY no debe generar errores de título/subtítulo"
+
+
+def test_subtitle_placeholder_validates_regardless_of_position():
+    ctx = _make_ctx(
+        size=14.0,
+        font="Helvetica Neue",
+        color_hex="#FF0000",
+        placeholder_type="SUBTITLE",
+        bbox=(10.0, 300.0, 400.0, 320.0),
+    )
+    issues = validate_text_span(ctx)
+    color_issues = [i for i in issues if i.category == "color"]
+    assert color_issues, "Texto en placeholder SUBTITLE fuera de posición debe validar color"
+
+
+def test_body_placeholder_still_validates_font():
+    ctx = _make_ctx(
+        font="Arial",
+        placeholder_type="BODY",
+        bbox=(10.0, 100.0, 600.0, 120.0),
+    )
+    issues = validate_text_span(ctx)
+    font_issues = [i for i in issues if i.category == "tipografía"]
+    assert font_issues, "Texto en placeholder BODY con fuente no ADG debe seguir detectándose"
+
+
+def test_free_text_top_left_still_validates():
+    ctx = _make_ctx(
+        size=14.0,
+        font="Helvetica Neue",
+        color_hex="#FF0000",
+        placeholder_type=None,
+        bbox=(10.0, 50.0, 300.0, 70.0),
+    )
+    issues = validate_text_span(ctx)
+    color_issues = [i for i in issues if i.category == "color"]
+    assert color_issues, "Texto libre en zona superior-izquierda debe validar color de subtítulo"
+
+
+def test_free_text_bottom_does_not_validate_as_subtitle():
+    ctx = _make_ctx(
+        size=14.0,
+        font="Helvetica Neue",
+        color_hex="#FF0000",
+        placeholder_type=None,
+        bbox=(10.0, 350.0, 300.0, 370.0),
+    )
+    issues = validate_text_span(ctx)
+    header_issues = [i for i in issues if "subtítulo" in i.message.lower() or "título" in i.message.lower()]
+    assert not header_issues, "Texto libre en zona inferior no debe validarse como título/subtítulo"
+
+
+def test_collect_slides_text_spans_stores_placeholder_type():
+    slide = {
+        "pageElements": [
+            {
+                "objectId": "body1",
+                "transform": {"scaleX": 1, "scaleY": 1, "translateX": 0, "translateY": 0},
+                "size": {
+                    "width": {"magnitude": 400, "unit": "PT"},
+                    "height": {"magnitude": 200, "unit": "PT"},
+                },
+                "shape": {
+                    "placeholder": {"type": "BODY"},
+                    "text": {
+                        "textElements": [
+                            {"endIndex": 7, "paragraphMarker": {"style": {}}},
+                            {
+                                "endIndex": 7,
+                                "textRun": {
+                                    "content": "Texto\n",
+                                    "style": {
+                                        "fontFamily": "Helvetica Neue",
+                                        "fontSize": {"magnitude": 14, "unit": "PT"},
+                                    },
+                                },
+                            },
+                        ]
+                    },
+                },
+            }
+        ]
+    }
+    spans = collect_slides_text_spans(slide, None)
+    assert spans[0][2]["placeholder_type"] == "BODY"
 
 
 def test_validate_sample_pdf():
