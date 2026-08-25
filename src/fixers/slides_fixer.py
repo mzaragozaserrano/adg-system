@@ -28,6 +28,8 @@ def issue_from_fix_input(data: dict[str, Any]) -> ValidationIssue:
 
 
 def parse_google_http_error(exc: HttpError) -> str:
+    import logging
+    log = logging.getLogger(__name__)
     raw = ""
     try:
         content = exc.content.decode("utf-8") if isinstance(exc.content, bytes) else exc.content
@@ -35,14 +37,15 @@ def parse_google_http_error(exc: HttpError) -> str:
         raw = str(payload.get("error", {}).get("message") or "")
     except Exception:
         raw = str(exc)
+    log.error("Google Slides API error: status=%s raw=%s", exc.status_code, raw)
     lowered = raw.lower()
     if "font" in lowered:
         return (
-            "Google Slides no pudo aplicar la fuente corporativa. "
+            f"Google Slides no pudo aplicar la fuente corporativa ({raw[:120]}). "
             "Vuelve a pulsar Reintentar; si persiste, abre la copia de trabajo y cambia la fuente a Helvetica Neue."
         )
     if "range" in lowered or "index" in lowered:
-        return "Google Slides rechazó el rango de texto al aplicar la corrección."
+        return f"Google Slides rechazó el rango de texto al aplicar la corrección: {raw[:120]}"
     if raw:
         first_line = raw.split("\n", 1)[0].strip()
         if len(first_line) > 220:
@@ -204,10 +207,9 @@ class SlidesFixer:
                         "updateTextStyle": {
                             "objectId": dummy_id,
                             "style": {
-                                "fontFamily": family,
                                 "weightedFontFamily": {"fontFamily": family, "weight": 400},
                             },
-                            "fields": "fontFamily,weightedFontFamily",
+                            "fields": "weightedFontFamily",
                             "textRange": {"type": "ALL"},
                         }
                     },
@@ -250,12 +252,11 @@ class SlidesFixer:
 
         if issue.fix_type == "font_family":
             family = issue.fix_payload["font_family"]
-            style["fontFamily"] = family
             style["weightedFontFamily"] = {
                 "fontFamily": family,
                 "weight": issue.fix_payload.get("weight", 400),
             }
-            fields.extend(["fontFamily", "weightedFontFamily"])
+            fields.append("weightedFontFamily")
         elif issue.fix_type == "font_weight":
             if issue.fix_payload.get("bold") is True:
                 style["bold"] = True
