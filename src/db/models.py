@@ -69,7 +69,12 @@ class UserSession(Base):
 
     @property
     def is_expired(self) -> bool:
-        return datetime.now(timezone.utc) >= self.expires_at
+        exp = self.expires_at
+        if exp is None:
+            return True
+        if exp.tzinfo is None:
+            exp = exp.replace(tzinfo=timezone.utc)
+        return datetime.now(timezone.utc) >= exp
 
 
 class FixRecord(Base):
