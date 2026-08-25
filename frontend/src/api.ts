@@ -12,29 +12,43 @@ export function clearToken() {
   localStorage.removeItem("adg_token");
 }
 
-async function apiFetch(path: string, options: RequestInit = {}) {
+async function apiFetch(path: string, options: RequestInit = {}, retries = 2) {
   const headers = new Headers(options.headers || {});
   const token = getToken();
   if (token) headers.set("Authorization", `Bearer ${token}`);
-  let response: Response;
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    if (attempt > 0) {
+      await new Promise((res) => setTimeout(res, attempt * 1500));
+    }
+    let response: Response;
+    try {
+      response = await fetch(`${API_BASE}${path}`, { ...options, headers });
+    } catch {
+      if (attempt < retries) continue;
+      throw new Error("El servidor no está disponible. Espera un momento y vuelve a intentar.");
+    }
+    if (!response.ok) {
+      const body = await response.json().catch(() => ({ detail: response.statusText }));
+      const detail = body?.detail;
+      const message =
+        typeof detail === "string"
+          ? detail
+          : Array.isArray(detail)
+            ? detail.map((item: { msg?: string }) => item.msg || JSON.stringify(item)).join("; ")
+            : JSON.stringify(body);
+      throw new Error(message || `Error de API (${response.status})`);
+    }
+    return response;
+  }
+  throw new Error("El servidor no está disponible. Espera un momento y vuelve a intentar.");
+}
+
+export async function wakeApi() {
   try {
-    response = await fetch(`${API_BASE}${path}`, { ...options, headers });
-  } catch (err) {
-    const reason = err instanceof Error ? err.message : String(err);
-    throw new Error(`Failed to fetch (${API_BASE}${path}): ${reason}`);
+    await fetch(`${API_BASE}/health`);
+  } catch {
+    // warm-up silencioso: si falla no pasa nada
   }
-  if (!response.ok) {
-    const body = await response.json().catch(() => ({ detail: response.statusText }));
-    const detail = body?.detail;
-    const message =
-      typeof detail === "string"
-        ? detail
-        : Array.isArray(detail)
-          ? detail.map((item: { msg?: string }) => item.msg || JSON.stringify(item)).join("; ")
-          : JSON.stringify(body);
-    throw new Error(message || `Error de API (${response.status})`);
-  }
-  return response;
 }
 
 export async function fetchMe() {

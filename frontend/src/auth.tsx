@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
-import { clearToken, fetchMe, getToken, logoutSession, setToken } from "./api";
+import { clearToken, fetchMe, getToken, logoutSession, setToken, wakeApi } from "./api";
 
 interface User {
   id: number;
@@ -22,6 +22,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    wakeApi();
     const token = getToken();
     if (!token) {
       setLoading(false);
