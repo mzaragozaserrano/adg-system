@@ -137,6 +137,8 @@ class SlidesValidator:
                 object_id=span_data.get("object_id"),
                 text_range=span_data.get("text_range"),
                 placeholder_type=span_data.get("placeholder_type"),
+                bold=bool(span_data.get("bold", False)),
+                light=bool(span_data.get("light", False)),
             )
             issues.extend(validate_text_span(ctx))
 
