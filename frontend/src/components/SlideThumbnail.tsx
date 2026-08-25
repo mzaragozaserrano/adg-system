@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { fetchThumbnail } from "../api";
 
 const thumbnailCache = new Map<string, string>();
@@ -14,6 +14,9 @@ export function clearThumbnailCache(): void {
   thumbnailCache.clear();
 }
 
+const MAX_RETRIES = 3;
+const RETRY_DELAYS_MS = [2000, 5000, 10000];
+
 export function preloadSlideThumbnails(
   presentationId: string,
   slideNumbers: number[],
@@ -28,7 +31,7 @@ export function preloadSlideThumbnails(
   }
 
   let remaining = pending.length;
-  const concurrency = 6;
+  const concurrency = 3;
   let cursor = 0;
 
   const worker = async () => {
@@ -36,16 +39,21 @@ export function preloadSlideThumbnails(
       const slideNumber = pending[cursor];
       cursor += 1;
       const key = thumbnailCacheKey(presentationId, slideNumber);
-      try {
-        const url = await fetchThumbnail(presentationId, slideNumber);
-        thumbnailCache.set(key, url);
-      } catch {
-        // ignored
-      } finally {
-        remaining -= 1;
-        onLoaded?.();
-        if (remaining <= 0) return;
+      for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+        if (attempt > 0) {
+          await new Promise((res) => setTimeout(res, RETRY_DELAYS_MS[attempt - 1] ?? 10000));
+        }
+        try {
+          const url = await fetchThumbnail(presentationId, slideNumber);
+          thumbnailCache.set(key, url);
+          break;
+        } catch {
+          if (attempt === MAX_RETRIES) break;
+        }
       }
+      remaining -= 1;
+      onLoaded?.();
+      if (remaining <= 0) return;
     }
   };
 
@@ -68,39 +76,41 @@ export default function SlideThumbnail({
   const cacheKey = thumbnailCacheKey(presentationId, slideNumber);
   const [src, setSrc] = useState<string | null>(() => thumbnailCache.get(cacheKey) || null);
   const [loading, setLoading] = useState(!thumbnailCache.has(cacheKey));
-  const [failed, setFailed] = useState(false);
+  const [retryCount, setRetryCount] = useState(0);
+  const activeRef = useRef(true);
 
-  useEffect(() => {
+  const load = useCallback(() => {
     const cached = thumbnailCache.get(cacheKey);
     if (cached) {
       setSrc(cached);
       setLoading(false);
-      setFailed(false);
       return;
     }
-
-    let active = true;
+    activeRef.current = true;
     setLoading(true);
-    setFailed(false);
     fetchThumbnail(presentationId, slideNumber)
       .then((url) => {
         thumbnailCache.set(cacheKey, url);
-        if (active) {
+        if (activeRef.current) {
           setSrc(url);
           setLoading(false);
         }
       })
       .catch(() => {
-        if (active) {
-          setFailed(true);
+        if (activeRef.current) {
           setLoading(false);
         }
       });
+  }, [cacheKey, presentationId, slideNumber]);
 
-    return () => { active = false; };
-  }, [cacheKey, presentationId, slideNumber, cacheVersion]);
+  useEffect(() => {
+    activeRef.current = true;
+    load();
+    return () => { activeRef.current = false; };
+  }, [load, cacheVersion, retryCount]);
 
   const className = variant === "issue" ? "slide-thumb slide-thumb-issue" : "slide-thumb slide-thumb-summary";
+  const hasSrc = Boolean(src);
 
   if (loading) {
     return (
@@ -110,10 +120,19 @@ export default function SlideThumbnail({
     );
   }
 
-  if (failed || !src) {
+  if (!hasSrc) {
     return (
       <div className={`${className} slide-thumb-placeholder slide-thumb-missing`} aria-label={`Diapositiva ${slideNumber}`}>
         <span>{slideNumber}</span>
+        {retryCount < MAX_RETRIES && (
+          <button
+            className="slide-thumb-retry"
+            title="Reintentar carga"
+            onClick={() => setRetryCount((c) => c + 1)}
+          >
+            ↺
+          </button>
+        )}
       </div>
     );
   }
@@ -121,9 +140,9 @@ export default function SlideThumbnail({
   return (
     <div className="slide-thumb-wrap">
       <div className="slide-thumb-hover">
-        <img className={className} src={src} alt={`Diapositiva ${slideNumber}`} />
+        <img className={className} src={src!} alt={`Diapositiva ${slideNumber}`} />
         <div className="slide-thumb-zoom" aria-hidden="true">
-          <img src={src} alt="" />
+          <img src={src!} alt="" />
         </div>
       </div>
       {showLabel && <span className="slide-thumb-label">Diap. {slideNumber}</span>}
