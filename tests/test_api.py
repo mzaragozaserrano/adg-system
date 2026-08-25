@@ -77,12 +77,12 @@ def test_issue_to_request_font_family():
         fix_payload={"font_family": "Helvetica Neue"},
     )
     request = fixer._issue_to_request(issue)
-    assert request["updateTextStyle"]["style"]["fontFamily"] == "Helvetica Neue"
+    assert "fontFamily" not in request["updateTextStyle"]["style"]
     assert request["updateTextStyle"]["style"]["weightedFontFamily"] == {
         "fontFamily": "Helvetica Neue",
         "weight": 400,
     }
-    assert "weightedFontFamily" in request["updateTextStyle"]["fields"]
+    assert request["updateTextStyle"]["fields"] == "weightedFontFamily"
     assert request["updateTextStyle"]["textRange"] == {
         "type": "FIXED_RANGE",
         "startIndex": 0,

@@ -41,6 +41,8 @@ class TextSpanContext:
     text_range: dict[str, int] | None = None
     extra_skip: bool = False
     placeholder_type: str | None = None
+    bold: bool = False
+    light: bool = False
 
 
 def validate_text_span(ctx: TextSpanContext) -> list[ValidationIssue]:
@@ -77,7 +79,8 @@ def validate_text_span(ctx: TextSpanContext) -> list[ValidationIssue]:
         if ctx.object_id:
             fix_fields["object_id"] = ctx.object_id
             fix_fields["fix_type"] = "font_family"
-            fix_fields["fix_payload"] = {"font_family": BRAND_FONT}
+            weight = 700 if ctx.bold else (300 if ctx.light else 400)
+            fix_fields["fix_payload"] = {"font_family": BRAND_FONT, "weight": weight}
         if ctx.text_range:
             fix_fields["text_range"] = ctx.text_range
         issues.append(
