@@ -5,7 +5,7 @@ from fastapi import Depends, HTTPException, Header
 from google.oauth2.credentials import Credentials
 from sqlalchemy.orm import Session
 
-from src.auth.security import credentials_from_encrypted, decode_access_token
+from src.auth.security import credentials_from_encrypted, decode_access_token, is_session_valid
 from src.db.models import User, ValidationRecord, get_db
 
 
@@ -20,6 +20,10 @@ def get_current_user(
         payload = decode_access_token(token)
     except ValueError as exc:
         raise HTTPException(status_code=401, detail=str(exc)) from exc
+
+    jti = payload.get("jti")
+    if not jti or not is_session_valid(db, jti):
+        raise HTTPException(status_code=401, detail="Sesión expirada o cerrada. Vuelve a iniciar sesión.")
 
     user = db.query(User).filter(User.id == int(payload["sub"])).first()
     if not user or not user.is_active:

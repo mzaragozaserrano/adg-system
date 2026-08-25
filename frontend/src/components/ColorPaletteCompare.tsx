@@ -1,17 +1,19 @@
+import type { PaletteColorOption } from "../constants/brandPalette";
+
 export default function ColorPaletteCompare({
   actual,
-  suggestions,
+  options,
   selected,
   onSelect,
   groupKey,
 }: {
   actual: string;
-  suggestions: Array<{ color: string; label: string }>;
+  options: PaletteColorOption[];
   selected: string;
   onSelect: (color: string) => void;
   groupKey: string;
 }) {
-  const selectedSuggestion = suggestions.find((item) => item.color === selected) || suggestions[0];
+  const selectedOption = options.find((item) => item.color === selected) || options[0];
 
   return (
     <div className="color-palette-compare">
@@ -20,27 +22,39 @@ export default function ColorPaletteCompare({
         <span className="color-palette-label">Actual</span>
         <span className="color-palette-hex">{actual}</span>
       </div>
-      <div className="color-palette-cell">
+      <div className="color-palette-cell color-palette-cell-wide">
         <div
           className="color-palette-swatch"
-          style={{ backgroundColor: selectedSuggestion?.color || selected }}
+          style={{ backgroundColor: selectedOption?.color || selected }}
           aria-hidden="true"
         />
-        <label className="color-palette-label" htmlFor={`palette-select-${groupKey}`}>
-          Sugerido
-        </label>
-        <select
-          id={`palette-select-${groupKey}`}
-          className="color-palette-select"
-          value={selected}
-          onChange={(event) => onSelect(event.target.value)}
+        <span className="color-palette-label" id={`palette-label-${groupKey}`}>
+          Paleta ADG
+        </span>
+        <span className="color-palette-hex">{selectedOption?.label || selected}</span>
+        <div
+          className="color-palette-options"
+          role="radiogroup"
+          aria-labelledby={`palette-label-${groupKey}`}
         >
-          {suggestions.map((item) => (
-            <option key={item.color} value={item.color}>
-              {item.label}
-            </option>
+          {options.map((item) => (
+            <button
+              key={item.color}
+              type="button"
+              className={`color-palette-option ${selected === item.color ? "selected" : ""}`}
+              onClick={() => onSelect(item.color)}
+              title={item.label}
+              aria-label={item.label}
+              aria-pressed={selected === item.color}
+            >
+              <span
+                className="color-palette-option-swatch"
+                style={{ backgroundColor: item.color }}
+                aria-hidden="true"
+              />
+            </button>
           ))}
-        </select>
+        </div>
       </div>
     </div>
   );

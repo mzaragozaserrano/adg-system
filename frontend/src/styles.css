@@ -199,12 +199,22 @@ p {
 }
 
 .error-banner {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
   background: rgba(255,107,107,0.15);
   border: 1px solid var(--error);
   color: #ffb4b4;
   padding: 0.75rem 1rem;
   border-radius: var(--radius);
   margin-bottom: 1rem;
+}
+
+.error-banner span {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .status-banner {
@@ -287,13 +297,6 @@ p {
   border-color: var(--petrol);
 }
 
-.fix-actions {
-  display: flex;
-  gap: 0.75rem;
-  flex-wrap: wrap;
-  margin-bottom: 1.5rem;
-}
-
 .slide-group {
   position: relative;
   background: var(--surface);
@@ -309,15 +312,27 @@ p {
 }
 
 .slide-group summary {
+  position: sticky;
+  top: 0;
+  z-index: 5;
   cursor: pointer;
   font-weight: 600;
-  padding: 0.75rem 0;
+  margin: -0.5rem -1rem 0;
+  padding: 0.75rem 1rem;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
   list-style: none;
   overflow: visible;
+  background: var(--surface);
+  border-bottom: 1px solid transparent;
+  border-radius: var(--radius) var(--radius) 0 0;
+}
+
+.slide-group[open] summary {
+  border-bottom-color: rgba(255,255,255,0.08);
+  box-shadow: 0 8px 18px rgba(15, 10, 26, 0.55);
 }
 
 .slide-group summary::-webkit-details-marker {
@@ -431,13 +446,8 @@ p {
   border: 1px solid rgba(220, 80, 80, 0.45);
 }
 
-.btn-fix-batch.btn-fix-fixing {
-  opacity: 0.85;
-}
-
-.btn-fix-batch.btn-fix-fixed {
-  background: rgba(78, 205, 196, 0.2);
-  border: 1px solid rgba(78, 205, 196, 0.45);
+.btn-fix-error:hover {
+  background: rgba(220, 80, 80, 0.35);
 }
 
 .slide-thumb {
@@ -557,6 +567,25 @@ p {
   border-left-color: var(--warn);
 }
 
+.issue-preview {
+  color: var(--steel);
+  font-style: italic;
+  font-size: 0.95rem;
+  margin: 0 0 0.75rem;
+}
+
+.issue-group-count {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.issue-item + .issue-item {
+  padding-top: 0.85rem;
+  margin-top: 0.85rem;
+  border-top: 1px solid rgba(255,255,255,0.08);
+}
+
 .issue-header {
   display: flex;
   gap: 0.5rem;
@@ -575,12 +604,6 @@ p {
   margin: 0.25rem 0;
 }
 
-.issue-preview {
-  color: var(--steel);
-  font-style: italic;
-  font-size: 0.9rem;
-}
-
 .issue-meta {
   font-size: 0.85rem;
   color: var(--muted);
@@ -589,9 +612,53 @@ p {
 
 .color-palette-compare {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
   gap: 0.75rem;
   margin-top: 0.75rem;
+}
+
+.color-palette-cell-wide {
+  min-width: 0;
+}
+
+.color-palette-options {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.45rem;
+  margin-top: 0.35rem;
+}
+
+.color-palette-option {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.2rem;
+  border-radius: 8px;
+  border: 2px solid transparent;
+  background: transparent;
+  cursor: pointer;
+}
+
+.color-palette-option:hover {
+  border-color: rgba(255, 255, 255, 0.25);
+}
+
+.color-palette-option.selected {
+  border-color: var(--ok);
+  box-shadow: 0 0 0 1px rgba(78, 205, 196, 0.35);
+}
+
+.color-palette-option-swatch {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.12);
+}
+
+.color-palette-select {
+  display: none;
 }
 
 .color-palette-cell {
@@ -679,15 +746,6 @@ p {
   justify-content: flex-end;
   gap: 0.5rem;
   flex-wrap: wrap;
-}
-
-.fix-checkbox {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  font-size: 0.8rem;
-  color: var(--ok);
-  margin-bottom: 0.5rem;
 }
 
 .slides-action-bar {

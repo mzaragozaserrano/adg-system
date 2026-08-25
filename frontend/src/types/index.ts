@@ -41,6 +41,9 @@ export interface BulkPromptState {
   action: BulkAction;
   anchor: Issue;
   similarIds: string[];
+  currentIds?: string[];
+  matchCount?: number;
+  problemsLabel?: string;
 }
 
 export interface LayoutBuildResult {

@@ -5,6 +5,7 @@ from pathlib import Path
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from google.oauth2.credentials import Credentials
+from googleapiclient.errors import HttpError
 from sqlalchemy.orm import Session
 
 from src.api.deps import (
@@ -16,7 +17,7 @@ from src.api.deps import (
 )
 from src.api.schemas import ExportRequest, FixRequest, SlidesValidateRequest
 from src.db.models import FixRecord, User, ValidationRecord, get_db
-from src.fixers.slides_fixer import SlidesFixer, issue_from_fix_input
+from src.fixers.slides_fixer import SlidesFixer, issue_from_fix_input, parse_google_http_error
 from src.services.drive_files import assert_google_slides_file
 from src.services.report_pdf import generate_report_pdf
 from src.services.thumbnails import get_slide_thumbnail, warm_slide_thumbnails
@@ -110,6 +111,8 @@ def fix_presentation(
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except HttpError as exc:
+        raise HTTPException(status_code=400, detail=parse_google_http_error(exc)) from exc
 
     record = FixRecord(
         user_id=user.id,
