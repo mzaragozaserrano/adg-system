@@ -1,6 +1,5 @@
 import json
 import tempfile
-import threading
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
@@ -68,16 +67,12 @@ def validate_slides_url(
     validation_id = save_validation_record(db, user, result)
     result.validation_id = str(validation_id)
 
-    total_slides = result.total_slides or 0
-    all_slide_numbers = list(range(1, total_slides + 1)) if total_slides > 0 else sorted(
-        {issue.slide_number for issue in result.issues}
-    )
-    if all_slide_numbers:
-        threading.Thread(
-            target=warm_slide_thumbnails,
-            args=(creds, presentation_id, all_slide_numbers),
-            daemon=True,
-        ).start()
+    issue_slide_numbers = sorted({issue.slide_number for issue in result.issues})
+    if issue_slide_numbers:
+        try:
+            warm_slide_thumbnails(creds, presentation_id, issue_slide_numbers)
+        except Exception:
+            pass
 
     response = result.to_dict()
     if result.fixable_count > 0:
