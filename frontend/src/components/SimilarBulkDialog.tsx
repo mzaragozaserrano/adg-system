@@ -1,4 +1,5 @@
 import type { BulkPromptState } from "../types";
+import { categoryLabel } from "../utils/issueLabels";
 
 export default function SimilarBulkDialog({
   prompt,
@@ -27,7 +28,7 @@ export default function SimilarBulkDialog({
         ) : (
           <p>
             Hay {prompt.similarIds.length} errores con el mismo problema:{" "}
-            <strong>{prompt.anchor.category}</strong> <em>«{prompt.anchor.actual}»</em>.
+            <strong>{categoryLabel(prompt.anchor.category)}</strong> <em>«{prompt.anchor.actual}»</em>.
             ¿Quieres {actionLabel} todos?
           </p>
         )}

@@ -22,39 +22,27 @@ export default function ColorPaletteCompare({
         <span className="color-palette-label">Actual</span>
         <span className="color-palette-hex">{actual}</span>
       </div>
-      <div className="color-palette-cell color-palette-cell-wide">
+      <div className="color-palette-cell">
         <div
           className="color-palette-swatch"
           style={{ backgroundColor: selectedOption?.color || selected }}
           aria-hidden="true"
         />
-        <span className="color-palette-label" id={`palette-label-${groupKey}`}>
-          Paleta ADG
-        </span>
-        <span className="color-palette-hex">{selectedOption?.label || selected}</span>
-        <div
-          className="color-palette-options"
-          role="radiogroup"
-          aria-labelledby={`palette-label-${groupKey}`}
+        <label className="color-palette-label" htmlFor={`palette-select-${groupKey}`}>
+          Corrección
+        </label>
+        <select
+          id={`palette-select-${groupKey}`}
+          className="color-palette-select"
+          value={selected}
+          onChange={(event) => onSelect(event.target.value)}
         >
           {options.map((item) => (
-            <button
-              key={item.color}
-              type="button"
-              className={`color-palette-option ${selected === item.color ? "selected" : ""}`}
-              onClick={() => onSelect(item.color)}
-              title={item.label}
-              aria-label={item.label}
-              aria-pressed={selected === item.color}
-            >
-              <span
-                className="color-palette-option-swatch"
-                style={{ backgroundColor: item.color }}
-                aria-hidden="true"
-              />
-            </button>
+            <option key={item.color} value={item.color}>
+              {item.label}
+            </option>
           ))}
-        </div>
+        </select>
       </div>
     </div>
   );
